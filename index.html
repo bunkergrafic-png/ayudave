@@ -766,7 +766,11 @@ function renderDesaparecidos(lista) {
   if (filtroDesapActivo === 'adulto-mayor') f = lista.filter(d => d.edad >= 60);
   
   const q = document.getElementById('search-desap')?.value || '';
-  if (q) f = f.filter(d => d.nombre.toLowerCase().includes(q.toLowerCase()) || d.zona.toLowerCase().includes(q.toLowerCase()));
+  if (q) f = f.filter(d => 
+    d.nombre.toLowerCase().includes(q.toLowerCase()) || 
+    d.zona.toLowerCase().includes(q.toLowerCase()) ||
+    (d.cedula && d.cedula.includes(q))
+  );
   
   const el = document.getElementById('lista-desap');
   
@@ -785,7 +789,7 @@ function renderDesaparecidos(lista) {
         <div class="missing-avatar" style="background:${col}">${ini}</div>
         <div class="missing-info">
           <div class="missing-name">${d.nombre} <span class="badge ${d.encontrado?'encontrado':'buscado'}" style="font-size:10px">${d.encontrado?'✓ Encontrado':'Buscado'}</span></div>
-          <div class="missing-detail">${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}</div>
+          <div class="missing-detail">${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}${d.cedula ? ` · <strong>C.I: ${d.cedula}</strong>` : ''}</div>
           <div class="missing-detail">📍 Última vez: ${d.zona}</div>
           <div class="missing-detail">📅 ${d.fecha} · ${d.ropa}</div>
           ${d.seña?`<div class="missing-detail" style="color:#8B0000">⚠️ ${d.seña}</div>`:''}
@@ -962,10 +966,21 @@ function formDesaparecido() {
   const estadosOpts = ESTADOS_VE.map(e => `<option>${e}</option>`).join('');
   return `
     <div class="form-title">🔍 Reportar persona desaparecida</div>
+    <div class="form-group">
+      <label class="form-label">Nombre completo</label>
+      <input class="form-input" id="fd-nombre" placeholder="Nombre y apellido">
+    </div>
     <div class="form-row">
       <div class="form-group">
-        <label class="form-label">Nombre completo</label>
-        <input class="form-input" id="fd-nombre" placeholder="Nombre y apellido">
+        <label class="form-label">Cédula de identidad</label>
+        <div style="display:flex;gap:4px">
+          <select class="form-select" id="fd-cedula-tipo" style="width:56px;flex-shrink:0;padding:10px 4px">
+            <option>V-</option>
+            <option>E-</option>
+            <option>P-</option>
+          </select>
+          <input class="form-input" type="number" id="fd-cedula" placeholder="12345678" style="flex:1">
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Edad</label>
@@ -1120,8 +1135,13 @@ async function enviarDesaparecido() {
     return;
   }
   
+  const cedulaTipo = document.getElementById('fd-cedula-tipo')?.value || 'V-';
+  const cedulaNum = document.getElementById('fd-cedula')?.value?.trim() || '';
+  const cedula = cedulaNum ? `${cedulaTipo}${cedulaNum}` : '';
+
   const datos = {
     nombre,
+    cedula,
     edad: parseInt(edad) || 0,
     sexo: document.getElementById('fd-sexo')?.value || 'M',
     fecha: document.getElementById('fd-fecha')?.value || new Date().toLocaleDateString('es-VE'),
@@ -1237,7 +1257,7 @@ function compartirWA(punto) {
 }
 
 function compartirDesap(d) {
-  const texto = `🔍 *SE BUSCA - TERREMOTO VENEZUELA*\n\n👤 *${d.nombre}*\n🎂 ${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}\n📍 Última vez en: ${d.zona}\n📅 Desde: ${d.fecha}\n👕 Ropa: ${d.ropa}\n${d.seña?`⚠️ ${d.seña}\n`:''}\n📞 Contactar: ${d.contacto}\n\n🙏 Por favor comparte esta información. Un retuit puede reunir a una familia.\n\n🔗 https://ayudave.org`;
+  const texto = `🔍 *SE BUSCA - TERREMOTO VENEZUELA*\n\n👤 *${d.nombre}*\n${d.cedula ? `🪪 C.I: ${d.cedula}\n` : ''}🎂 ${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}\n📍 Última vez en: ${d.zona}\n📅 Desde: ${d.fecha}\n👕 Ropa: ${d.ropa}\n${d.seña?`⚠️ ${d.seña}\n`:''}\n📞 Contactar: ${d.contacto}\n\n🙏 Por favor comparte esta información. Un retuit puede reunir a una familia.\n\n🔗 https://ayudave-bice.vercel.app`;
   window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
 }
 
