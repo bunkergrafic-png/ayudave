@@ -1,0 +1,1355 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="theme-color" content="#8B0000">
+<meta name="description" content="AyudaVE - Coordinación de ayuda humanitaria Venezuela. Puntos de necesidad, desaparecidos, insumos.">
+<title>AyudaVE 🇻🇪 - Ayuda Humanitaria Venezuela</title>
+
+<!-- PWA manifest inline -->
+<link rel="manifest" href="data:application/json,{%22name%22:%22AyudaVE%22,%22short_name%22:%22AyudaVE%22,%22start_url%22:%22/%22,%22display%22:%22standalone%22,%22background_color%22:%22%238B0000%22,%22theme_color%22:%22%238B0000%22}">
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
+<!-- Leaflet para mapas -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+/* ===== RESET Y BASE ===== */
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:16px;background:#f5f5f0;color:#1a1a1a}
+button{cursor:pointer;font-family:inherit;border:none;outline:none}
+input,select,textarea{font-family:inherit;font-size:14px;outline:none}
+a{color:inherit;text-decoration:none}
+
+/* ===== VARIABLES ===== */
+:root{
+  --rojo:#8B0000;--rojo-hover:#6B0000;--rojo-light:#fff0f0;
+  --verde:#2d7a2d;--verde-light:#f0fff0;
+  --naranja:#d4700a;--naranja-light:#fff8f0;
+  --azul:#1a5fa8;--azul-light:#f0f5ff;
+  --gris:#666;--gris-bg:#f5f5f0;--borde:#e0e0d8;
+  --card:#ffffff;--radio:12px;--sombra:0 2px 8px rgba(0,0,0,.08);
+}
+
+/* ===== SPLASH ===== */
+#splash{position:fixed;inset:0;background:#8B0000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;transition:opacity .5s}
+#splash.hide{opacity:0;pointer-events:none}
+#splash h1{color:#fff;font-size:32px;font-weight:700;margin-top:16px}
+#splash p{color:rgba(255,255,255,.8);font-size:14px;margin-top:8px}
+.flag-emoji{font-size:64px;animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
+
+/* ===== APP SHELL ===== */
+#app{height:100%;display:flex;flex-direction:column;max-width:480px;margin:0 auto;background:#fff;position:relative}
+
+/* ===== HEADER ===== */
+.header{background:#8B0000;padding:12px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:100}
+.header-logo{font-size:24px}
+.header-text h1{color:#fff;font-size:17px;font-weight:600;line-height:1.2}
+.header-text p{color:rgba(255,255,255,.75);font-size:11px}
+.header-right{margin-left:auto;display:flex;gap:8px}
+.hbtn{background:rgba(255,255,255,.2);border:none;border-radius:8px;padding:6px 10px;color:#fff;font-size:12px;display:flex;align-items:center;gap:4px}
+.hbtn:active{background:rgba(255,255,255,.35)}
+
+/* ===== STATS BAR ===== */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:#e0e0d8}
+.stat{background:#fff;padding:8px 4px;text-align:center}
+.stat-n{font-size:20px;font-weight:700;line-height:1}
+.stat-l{font-size:10px;color:#888;margin-top:2px;line-height:1.2}
+.stat.rojo .stat-n{color:#8B0000}
+.stat.naranja .stat-n{color:#d4700a}
+.stat.verde .stat-n{color:#2d7a2d}
+.stat.azul .stat-n{color:#1a5fa8}
+
+/* ===== NAV ===== */
+.nav{display:flex;background:#fff;border-bottom:1px solid #e0e0d8;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.nav::-webkit-scrollbar{display:none}
+.nav-btn{flex:none;padding:11px 14px;font-size:13px;color:#888;border-bottom:2px solid transparent;display:flex;align-items:center;gap:5px;white-space:nowrap;background:none;transition:all .15s}
+.nav-btn.active{color:#8B0000;border-bottom-color:#8B0000;font-weight:600}
+.nav-icon{font-size:16px}
+
+/* ===== CONTENIDO ===== */
+.content{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;background:#f5f5f0}
+.section{display:none;min-height:100%}
+.section.active{display:block}
+
+/* ===== CARDS ===== */
+.card{background:#fff;border-radius:var(--radio);margin:10px 12px;box-shadow:var(--sombra);overflow:hidden}
+.card-header{padding:12px 14px;border-bottom:1px solid #f0f0e8;display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.card-title{font-size:14px;font-weight:600;line-height:1.3}
+.card-sub{font-size:12px;color:#888;margin-top:2px;display:flex;align-items:center;gap:4px}
+.card-body{padding:10px 14px}
+
+/* ===== BADGES ===== */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.badge.critico{background:#fff0f0;color:#8B0000}
+.badge.medio{background:#fff8f0;color:#d4700a}
+.badge.cubierto{background:#f0fff0;color:#2d7a2d}
+.badge.buscado{background:#fff8f0;color:#d4700a}
+.badge.encontrado{background:#f0fff0;color:#2d7a2d}
+.badge.urgente{background:#fff0f0;color:#8B0000}
+
+/* ===== NECESIDADES ===== */
+.necesidades{display:flex;flex-wrap:wrap;gap:5px;padding:8px 14px 12px}
+.nec-item{display:flex;align-items:center;gap:4px;font-size:12px;padding:3px 8px;border-radius:20px;border:1px solid #e0e0d8;background:#fafaf8}
+.nec-dot{width:7px;height:7px;border-radius:50%}
+.nec-dot.alta{background:#8B0000}
+.nec-dot.media{background:#d4700a}
+.nec-dot.baja{background:#2d7a2d}
+
+/* ===== BOTONES ===== */
+.btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:10px 16px;border-radius:8px;font-size:14px;font-weight:600;transition:all .15s}
+.btn:active{transform:scale(0.97)}
+.btn-rojo{background:#8B0000;color:#fff}
+.btn-rojo:active{background:#6B0000}
+.btn-outline{background:#fff;border:1.5px solid #8B0000;color:#8B0000}
+.btn-verde{background:#2d7a2d;color:#fff}
+.btn-ghost{background:#f5f5f0;color:#444;border:1px solid #e0e0d8}
+.btn-full{width:100%}
+.btn-sm{padding:6px 12px;font-size:12px}
+
+/* ===== MAPA ===== */
+#map{height:280px;border-radius:0;z-index:1}
+.map-legend{display:flex;gap:12px;padding:8px 14px;font-size:11px;color:#666;background:#fff;border-bottom:1px solid #f0f0e8}
+.legend-item{display:flex;align-items:center;gap:4px}
+.legend-dot{width:10px;height:10px;border-radius:50%}
+
+/* ===== PERSONA DESAPARECIDA ===== */
+.missing-card{display:flex;gap:12px;padding:12px 14px}
+.missing-avatar{width:52px;height:52px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#fff}
+.missing-info{flex:1;min-width:0}
+.missing-name{font-size:14px;font-weight:700;margin-bottom:2px}
+.missing-detail{font-size:12px;color:#666;line-height:1.5}
+.missing-btn{margin:8px 14px 12px;display:flex;gap:8px}
+
+/* ===== INSUMOS ===== */
+.insumo-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f5f5f0}
+.insumo-row:last-child{border-bottom:none}
+.insumo-icon{font-size:24px;width:36px;text-align:center;flex-shrink:0}
+.insumo-info{flex:1;min-width:0}
+.insumo-name{font-size:13px;font-weight:600}
+.insumo-sub{font-size:11px;color:#888;margin-top:1px}
+.progress-wrap{margin-top:4px;display:flex;align-items:center;gap:6px}
+.progress-bar{flex:1;height:5px;border-radius:3px;background:#eee;overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;transition:width .5s}
+.progress-pct{font-size:11px;font-weight:700;min-width:30px;text-align:right}
+
+/* ===== FORMULARIOS ===== */
+.form-section{background:#fff;margin:10px 12px;border-radius:var(--radio);box-shadow:var(--sombra);padding:16px}
+.form-title{font-size:16px;font-weight:700;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.form-group{margin-bottom:12px}
+.form-label{font-size:12px;font-weight:600;color:#555;margin-bottom:5px;display:block}
+.form-input{width:100%;padding:10px 12px;border:1.5px solid #e0e0d8;border-radius:8px;font-size:14px;background:#fafaf8;transition:border .15s}
+.form-input:focus{border-color:#8B0000;background:#fff}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-select{width:100%;padding:10px 12px;border:1.5px solid #e0e0d8;border-radius:8px;font-size:14px;background:#fafaf8;appearance:none;-webkit-appearance:none}
+textarea.form-input{resize:none;min-height:80px}
+
+/* ===== ALERTA BANNER ===== */
+.alert-banner{margin:10px 12px;padding:10px 14px;border-radius:8px;display:flex;align-items:flex-start;gap:8px;font-size:13px}
+.alert-banner.critico{background:#fff0f0;border:1px solid #f5c0c0;color:#8B0000}
+.alert-banner.info{background:#f0f5ff;border:1px solid #b0c8f0;color:#1a5fa8}
+.alert-icon{font-size:18px;flex-shrink:0;margin-top:-1px}
+
+/* ===== SECCIÓN TÍTULOS ===== */
+.section-header{padding:14px 14px 6px;display:flex;align-items:center;justify-content:space-between}
+.section-h{font-size:15px;font-weight:700;color:#1a1a1a}
+.section-count{font-size:12px;color:#888;background:#f0f0e8;padding:2px 8px;border-radius:12px}
+
+/* ===== MAPA PUNTOS COLORES ===== */
+.marker-critico{background:#8B0000;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.3)}
+.marker-medio{background:#d4700a;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.3)}
+.marker-cubierto{background:#2d7a2d;border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.3)}
+
+/* ===== TABS INTERNOS ===== */
+.inner-tabs{display:flex;gap:6px;padding:10px 12px 4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.inner-tabs::-webkit-scrollbar{display:none}
+.itab{flex:none;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid #e0e0d8;background:#fff;color:#666}
+.itab.active{background:#8B0000;color:#fff;border-color:#8B0000}
+
+/* ===== CONTACTO CARD ===== */
+.contact-row{display:flex;align-items:center;gap:8px;padding:8px 0;font-size:13px;color:#444;border-top:1px solid #f0f0e8}
+.contact-row:first-child{border-top:none;padding-top:0}
+.contact-icon{font-size:16px;width:24px;text-align:center}
+
+/* ===== MODAL ===== */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:flex-end;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.show{opacity:1;pointer-events:all}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:85vh;overflow-y:auto;padding:20px;transform:translateY(100%);transition:transform .3s}
+.modal-overlay.show .modal{transform:translateY(0)}
+.modal-handle{width:36px;height:4px;background:#e0e0d8;border-radius:2px;margin:0 auto 16px}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:16px}
+
+/* ===== TOAST ===== */
+#toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);background:#1a1a1a;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;font-weight:500;opacity:0;transition:all .3s;z-index:2000;white-space:nowrap;pointer-events:none}
+#toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===== FAB ===== */
+.fab{position:fixed;bottom:20px;right:16px;width:52px;height:52px;border-radius:50%;background:#8B0000;color:#fff;font-size:24px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 16px rgba(139,0,0,.4);z-index:500;border:none;transition:transform .15s}
+.fab:active{transform:scale(0.92)}
+
+/* ===== BÚSQUEDA ===== */
+.search-bar{padding:10px 12px;background:#f5f5f0;border-bottom:1px solid #e0e0d8}
+.search-input{width:100%;padding:9px 12px 9px 36px;border-radius:20px;border:1.5px solid #e0e0d8;background:#fff;font-size:14px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='8'/%3E%3Cpath d='m21 21-4.35-4.35'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:10px center}
+.search-input:focus{border-color:#8B0000}
+
+/* ===== ESTADO VACÍO ===== */
+.empty-state{text-align:center;padding:40px 20px;color:#888}
+.empty-icon{font-size:48px;margin-bottom:12px}
+.empty-title{font-size:15px;font-weight:600;color:#444;margin-bottom:6px}
+.empty-desc{font-size:13px;line-height:1.6}
+
+/* ===== LOADING ===== */
+.loading{display:flex;align-items:center;justify-content:center;padding:30px;color:#888;gap:8px}
+.spinner{width:20px;height:20px;border:2px solid #e0e0d8;border-top-color:#8B0000;border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ===== COMPARTIR ===== */
+.share-bar{display:flex;gap:8px;padding:8px 14px;background:#fafaf8;border-top:1px solid #f0f0e8}
+.share-btn{flex:1;padding:8px;border-radius:8px;font-size:12px;font-weight:600;text-align:center;display:flex;align-items:center;justify-content:center;gap:4px}
+.share-wa{background:#25D366;color:#fff}
+.share-copy{background:#f0f0e8;color:#444;border:1px solid #e0e0d8}
+
+/* ===== RESPONSIVE DESKTOP ===== */
+@media(min-width:481px){
+  body{background:#e8e8e0}
+  #app{border-radius:0;box-shadow:0 0 40px rgba(0,0,0,.15)}
+}
+</style>
+</head>
+<body>
+
+<!-- SPLASH -->
+<div id="splash">
+  <div class="flag-emoji">🇻🇪</div>
+  <h1>AyudaVE</h1>
+  <p>Coordinación de ayuda humanitaria</p>
+</div>
+
+<!-- APP -->
+<div id="app">
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="header-logo">🇻🇪</div>
+    <div class="header-text">
+      <h1>AyudaVE</h1>
+      <p>Emergencia · En vivo</p>
+    </div>
+    <div class="header-right">
+      <button class="hbtn" onclick="abrirReportar()">
+        <span>+</span> Reportar
+      </button>
+    </div>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-bar" id="stats-bar">
+    <div class="stat rojo"><div class="stat-n" id="st-criticos">-</div><div class="stat-l">Críticos</div></div>
+    <div class="stat naranja"><div class="stat-n" id="st-buscados">-</div><div class="stat-l">Buscados</div></div>
+    <div class="stat verde"><div class="stat-n" id="st-encontrados">-</div><div class="stat-l">Encontrados</div></div>
+    <div class="stat azul"><div class="stat-n" id="st-voluntarios">-</div><div class="stat-l">Voluntarios</div></div>
+  </div>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <button class="nav-btn active" onclick="verTab('mapa')" id="tab-mapa">
+      <span class="nav-icon">🗺️</span> Mapa
+    </button>
+    <button class="nav-btn" onclick="verTab('puntos')" id="tab-puntos">
+      <span class="nav-icon">📍</span> Puntos
+    </button>
+    <button class="nav-btn" onclick="verTab('desaparecidos')" id="tab-desaparecidos">
+      <span class="nav-icon">🔍</span> Desaparecidos
+    </button>
+    <button class="nav-btn" onclick="verTab('insumos')" id="tab-insumos">
+      <span class="nav-icon">📦</span> Insumos
+    </button>
+    <button class="nav-btn" onclick="verTab('voluntarios')" id="tab-voluntarios">
+      <span class="nav-icon">🤝</span> Voluntarios
+    </button>
+  </nav>
+
+  <!-- CONTENIDO -->
+  <div class="content">
+
+    <!-- ===== MAPA ===== -->
+    <div class="section active" id="sec-mapa">
+      <div class="map-legend">
+        <div class="legend-item"><div class="legend-dot" style="background:#8B0000"></div> Crítico</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#d4700a"></div> Necesita ayuda</div>
+        <div class="legend-item"><div class="legend-dot" style="background:#2d7a2d"></div> Cubierto</div>
+      </div>
+      <div id="map"></div>
+      <div class="alert-banner critico">
+        <div class="alert-icon">🚨</div>
+        <div>
+          <strong>Emergencia activa — Terremoto Venezuela 2025</strong><br>
+          <span style="font-size:12px">Toca un punto en el mapa para ver qué necesitan y cómo ayudar.</span>
+        </div>
+      </div>
+      <div id="mapa-puntos-lista"></div>
+    </div>
+
+    <!-- ===== PUNTOS ===== -->
+    <div class="section" id="sec-puntos">
+      <div class="search-bar">
+        <input class="search-input" type="search" id="search-puntos" placeholder="Buscar estado, ciudad, lugar..." oninput="filtrarPuntos(this.value)">
+      </div>
+      <div id="lista-puntos">
+        <div class="loading"><div class="spinner"></div> Cargando puntos...</div>
+      </div>
+    </div>
+
+    <!-- ===== DESAPARECIDOS ===== -->
+    <div class="section" id="sec-desaparecidos">
+      <div class="inner-tabs">
+        <button class="itab active" onclick="filtroDesap('todos')">Todos</button>
+        <button class="itab" onclick="filtroDesap('buscado')">Buscando</button>
+        <button class="itab" onclick="filtroDesap('encontrado')">Encontrados ✓</button>
+        <button class="itab" onclick="filtroDesap('menor')">Menores</button>
+        <button class="itab" onclick="filtroDesap('adulto-mayor')">Adultos mayores</button>
+      </div>
+      <div class="search-bar">
+        <input class="search-input" type="search" id="search-desap" placeholder="Buscar por nombre, zona, fecha..." oninput="filtrarDesap(this.value)">
+      </div>
+      <div id="lista-desap">
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+      </div>
+    </div>
+
+    <!-- ===== INSUMOS ===== -->
+    <div class="section" id="sec-insumos">
+      <div class="alert-banner info">
+        <div class="alert-icon">📊</div>
+        <div>Inventario actualizado en tiempo real. <strong>Rojo = urgente.</strong></div>
+      </div>
+      <div class="inner-tabs">
+        <button class="itab active" onclick="filtroInsumo('todos')">Todo</button>
+        <button class="itab" onclick="filtroInsumo('urgente')">🔴 Urgentes</button>
+        <button class="itab" onclick="filtroInsumo('agua')">💧 Agua</button>
+        <button class="itab" onclick="filtroInsumo('alimentos')">🍞 Alimentos</button>
+        <button class="itab" onclick="filtroInsumo('medicamentos')">💊 Medicamentos</button>
+        <button class="itab" onclick="filtroInsumo('ropa')">👕 Ropa</button>
+      </div>
+      <div id="lista-insumos">
+        <div class="loading"><div class="spinner"></div> Cargando...</div>
+      </div>
+    </div>
+
+    <!-- ===== VOLUNTARIOS ===== -->
+    <div class="section" id="sec-voluntarios">
+      <div class="alert-banner info">
+        <div class="alert-icon">🤝</div>
+        <div>¿Puedes ayudar? Regístrate como voluntario y conecta con quienes más te necesitan.</div>
+      </div>
+      <div class="form-section">
+        <div class="form-title">🙋 Quiero ser voluntario</div>
+        <div class="form-group">
+          <label class="form-label">Tu nombre</label>
+          <input class="form-input" type="text" id="vol-nombre" placeholder="Nombre completo">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Estado donde estás</label>
+            <select class="form-select" id="vol-estado"><option value="">Seleccionar...</option></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Teléfono</label>
+            <input class="form-input" type="tel" id="vol-tel" placeholder="04XX-XXXXXXX">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">¿En qué puedes ayudar? (selecciona las que apliquen)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px" id="habilidades-check">
+            <!-- JS las inserta -->
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">¿Tienes vehículo?</label>
+          <select class="form-select" id="vol-vehiculo">
+            <option value="no">No</option>
+            <option value="moto">Sí, moto</option>
+            <option value="carro">Sí, carro</option>
+            <option value="camion">Sí, camión/camioneta</option>
+          </select>
+        </div>
+        <button class="btn btn-rojo btn-full" onclick="registrarVoluntario()" style="margin-top:4px">
+          ✅ Registrarme como voluntario
+        </button>
+      </div>
+      <div id="lista-voluntarios" style="margin-top:4px"></div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /app -->
+
+<!-- FAB -->
+<button class="fab" onclick="abrirReportar()" title="Reportar">
+  ➕
+</button>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<!-- MODAL REPORTAR -->
+<div class="modal-overlay" id="modal-reportar" onclick="cerrarModal('modal-reportar')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div class="modal-title">¿Qué quieres reportar?</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      <button class="btn btn-outline" style="height:80px;flex-direction:column;gap:4px;border-radius:12px" onclick="abrirFormulario('punto')">
+        <span style="font-size:24px">📍</span>
+        <span style="font-size:13px">Punto de necesidad</span>
+      </button>
+      <button class="btn btn-outline" style="height:80px;flex-direction:column;gap:4px;border-radius:12px" onclick="abrirFormulario('desaparecido')">
+        <span style="font-size:24px">🔍</span>
+        <span style="font-size:13px">Persona desaparecida</span>
+      </button>
+      <button class="btn btn-outline" style="height:80px;flex-direction:column;gap:4px;border-radius:12px;border-color:#2d7a2d;color:#2d7a2d" onclick="abrirFormulario('encontrado')">
+        <span style="font-size:24px">✅</span>
+        <span style="font-size:13px">Persona encontrada</span>
+      </button>
+      <button class="btn btn-outline" style="height:80px;flex-direction:column;gap:4px;border-radius:12px;border-color:#1a5fa8;color:#1a5fa8" onclick="abrirFormulario('donacion')">
+        <span style="font-size:24px">📦</span>
+        <span style="font-size:13px">Ofrecer donación</span>
+      </button>
+    </div>
+    <button class="btn btn-ghost btn-full" style="margin-top:12px" onclick="cerrarModal('modal-reportar')">Cancelar</button>
+  </div>
+</div>
+
+<!-- MODAL FORMULARIO -->
+<div class="modal-overlay" id="modal-form" onclick="cerrarModal('modal-form')">
+  <div class="modal" onclick="event.stopPropagation()" style="max-height:90vh">
+    <div class="modal-handle"></div>
+    <div id="form-contenido"></div>
+  </div>
+</div>
+
+<!-- MODAL DETALLE PUNTO -->
+<div class="modal-overlay" id="modal-punto" onclick="cerrarModal('modal-punto')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-handle"></div>
+    <div id="detalle-punto"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURACIÓN FIREBASE
+// ⚠️  REEMPLAZA ESTO CON TUS DATOS DE FIREBASE CONSOLE
+// ============================================================
+const FIREBASE_CONFIG = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROYECTO.firebaseapp.com",
+  projectId: "TU_PROYECTO_ID",
+  storageBucket: "TU_PROYECTO.appspot.com",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
+};
+
+// ============================================================
+// DATOS DE DEMOSTRACIÓN (funcionan SIN Firebase configurado)
+// ============================================================
+const DATOS_DEMO = {
+  puntos: [
+    {id:'p1', nombre:'Escuela Básica Simón Bolívar', zona:'Barquisimeto, Lara', lat:10.0641, lng:-69.3578, estado:'critico', personas:142, voluntarios:8, contacto:'0414-123-4567', necesidades:[{item:'Agua potable',nivel:'alta'},{item:'Medicamentos básicos',nivel:'alta'},{item:'Ropa para niños',nivel:'media'},{item:'Alimentos',nivel:'media'}]},
+    {id:'p2', nombre:'Centro Comunal El Vigía', zona:'El Vigía, Mérida', lat:8.6240, lng:-71.6507, estado:'critico', personas:87, voluntarios:3, contacto:'0424-987-6543', necesidades:[{item:'Colchones',nivel:'alta'},{item:'Pañales',nivel:'alta'},{item:'Agua',nivel:'media'}]},
+    {id:'p3', nombre:'Parroquia San Francisco', zona:'Valencia, Carabobo', lat:10.1579, lng:-68.0079, estado:'medio', personas:210, voluntarios:22, contacto:'0412-555-3322', necesidades:[{item:'Alimentos',nivel:'media'},{item:'Ropa adultos',nivel:'media'},{item:'Kit limpieza',nivel:'baja'}]},
+    {id:'p4', nombre:'Cancha Las Mercedes', zona:'Caracas, Miranda', lat:10.4912, lng:-66.8793, estado:'cubierto', personas:55, voluntarios:18, contacto:'0416-111-2233', necesidades:[{item:'Agua',nivel:'baja'},{item:'Alimentos',nivel:'baja'}]},
+    {id:'p5', nombre:'Iglesia El Calvario', zona:'Maracaibo, Zulia', lat:10.6522, lng:-71.6196, estado:'critico', personas:98, voluntarios:5, contacto:'0426-444-7788', necesidades:[{item:'Insulina',nivel:'alta'},{item:'Agua',nivel:'alta'},{item:'Leche fórmula',nivel:'alta'}]},
+    {id:'p6', nombre:'Módulo Salud Petare', zona:'Petare, Miranda', lat:10.4820, lng:-66.8188, estado:'medio', personas:43, voluntarios:11, contacto:'0412-333-5566', necesidades:[{item:'Gasas y vendas',nivel:'alta'},{item:'Antibióticos',nivel:'media'}]},
+    {id:'p7', nombre:'Liceo Andrés Bello', zona:'San Cristóbal, Táchira', lat:7.7742, lng:-72.2238, estado:'critico', personas:180, voluntarios:6, contacto:'0418-222-4455', necesidades:[{item:'Agua',nivel:'alta'},{item:'Alimentos',nivel:'alta'},{item:'Cobijas',nivel:'media'}]},
+  ],
+  desaparecidos: [
+    {id:'d1', nombre:'María Rodríguez', edad:34, sexo:'F', zona:'Barquisimeto, Lara', fecha:'20/06/2025', ropa:'Vestido azul', contacto:'0414-123-4567', encontrado:false, seña:'Cabello largo negro'},
+    {id:'d2', nombre:'José Carlos Pérez', edad:67, sexo:'M', zona:'Mérida', fecha:'19/06/2025', ropa:'Camisa blanca, jeans', contacto:'0424-987-6543', encontrado:false, seña:'Usa lentes, cana'},
+    {id:'d3', nombre:'Sofía Hernández', edad:8, sexo:'F', zona:'Valencia', fecha:'21/06/2025', ropa:'Uniforme escolar azul', contacto:'0412-555-3322', encontrado:false, seña:'Trenza en el cabello'},
+    {id:'d4', nombre:'Carlos Medina', edad:45, sexo:'M', zona:'Caracas', fecha:'18/06/2025', ropa:'Camisa roja', contacto:'0416-111-2233', encontrado:true, seña:'Tatuaje en brazo izq.'},
+    {id:'d5', nombre:'Ana López', edad:72, sexo:'F', zona:'Maracaibo', fecha:'20/06/2025', ropa:'Bata floreada', contacto:'0426-444-7788', encontrado:false, seña:'Cabello blanco, baja estatura'},
+    {id:'d6', nombre:'Luis Ramírez', edad:12, sexo:'M', zona:'San Cristóbal', fecha:'21/06/2025', ropa:'Pantalón gris, franela amarilla', contacto:'0418-222-4455', encontrado:false, seña:'Cicatriz en mentón'},
+    {id:'d7', nombre:'Carmen Suárez', edad:55, sexo:'F', zona:'Barquisimeto', fecha:'20/06/2025', ropa:'Blusa verde', contacto:'0414-777-8899', encontrado:true, seña:'Cabello castaño, lentes redondos'},
+  ],
+  insumos: [
+    {id:'i1', cat:'💧', nombre:'Agua potable', sub:'Botellas 500ml', stock:1200, necesario:5000, tipo:'agua'},
+    {id:'i2', cat:'🍞', nombre:'Alimentos no perecederos', sub:'Cajas mixtas', stock:430, necesario:800, tipo:'alimentos'},
+    {id:'i3', cat:'💊', nombre:'Medicamentos básicos', sub:'Kits primeros auxilios', stock:89, necesario:500, tipo:'medicamentos'},
+    {id:'i4', cat:'🩺', nombre:'Material médico', sub:'Gasas, vendas, alcohol', stock:210, necesario:400, tipo:'medicamentos'},
+    {id:'i5', cat:'👕', nombre:'Ropa adultos', sub:'Todas las tallas', stock:680, necesario:1000, tipo:'ropa'},
+    {id:'i6', cat:'👶', nombre:'Pañales talla M/G', sub:'Paquetes', stock:45, necesario:600, tipo:'otros'},
+    {id:'i7', cat:'🍼', nombre:'Leche fórmula infantil', sub:'Latas', stock:12, necesario:200, tipo:'alimentos'},
+    {id:'i8', cat:'🛏️', nombre:'Colchones y cobijas', sub:'Unidades', stock:134, necesario:300, tipo:'otros'},
+    {id:'i9', cat:'💉', nombre:'Insulina', sub:'Viales', stock:8, necesario:150, tipo:'medicamentos'},
+    {id:'i10', cat:'🧴', nombre:'Kit higiene personal', sub:'Kits', stock:320, necesario:600, tipo:'otros'},
+  ],
+  voluntarios: [
+    {id:'v1', nombre:'Andreina Castillo', zona:'Lara', habilidades:['Médico/Enfermero','Primeros auxilios'], vehiculo:'carro', disponible:true},
+    {id:'v2', nombre:'Roberto Morales', zona:'Miranda', habilidades:['Transporte','Distribución'], vehiculo:'camion', disponible:true},
+    {id:'v3', nombre:'Luisa Fermín', zona:'Carabobo', habilidades:['Psicología','Atención a víctimas'], vehiculo:'no', disponible:true},
+  ],
+  stats: {criticos:7, buscados:5, encontrados:2, voluntarios:247}
+};
+
+const ESTADOS_VE = ['Amazonas','Anzoátegui','Apure','Aragua','Barinas','Bolívar','Carabobo','Cojedes','Delta Amacuro','Falcón','Guárico','Lara','Mérida','Miranda','Monagas','Nueva Esparta','Portuguesa','Sucre','Táchira','Trujillo','Vargas','Yaracuy','Zulia','Distrito Capital'];
+
+const HABILIDADES = ['Médico/Enfermero','Primeros auxilios','Transporte','Distribución','Cocina','Psicología','Búsqueda y rescate','Comunicaciones','Logística','Trabajo social','Mecánica','Electricidad','Construcción','Otro'];
+
+// ============================================================
+// ESTADO DE LA APP
+// ============================================================
+let db = null;
+let usandoFirebase = false;
+let datosActuales = {...DATOS_DEMO};
+let filtroDesapActivo = 'todos';
+let filtroInsumoActivo = 'todos';
+let mapa = null;
+let marcadores = [];
+
+// ============================================================
+// INICIALIZACIÓN
+// ============================================================
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    document.getElementById('splash').classList.add('hide');
+    inicializarApp();
+  }, 1800);
+});
+
+function inicializarApp() {
+  // Intentar conectar Firebase
+  if (FIREBASE_CONFIG.apiKey !== 'TU_API_KEY') {
+    try {
+      firebase.initializeApp(FIREBASE_CONFIG);
+      db = firebase.firestore();
+      usandoFirebase = true;
+      console.log('✅ Firebase conectado');
+      cargarDatosFirebase();
+    } catch(e) {
+      console.log('⚠️ Firebase no disponible, usando demo');
+      usarDatosDemo();
+    }
+  } else {
+    usarDatosDemo();
+  }
+  
+  inicializarUI();
+}
+
+function inicializarUI() {
+  // Stats
+  actualizarStats();
+  
+  // Mapa
+  setTimeout(inicializarMapa, 100);
+  
+  // Listas
+  renderPuntos(datosActuales.puntos);
+  renderDesaparecidos(datosActuales.desaparecidos);
+  renderInsumos(datosActuales.insumos);
+  renderVoluntariosLista(datosActuales.voluntarios);
+  
+  // Estados en selects
+  poblarEstados();
+  
+  // Habilidades checkboxes
+  poblarHabilidades();
+}
+
+function usarDatosDemo() {
+  datosActuales = JSON.parse(JSON.stringify(DATOS_DEMO));
+  mostrarToast('📱 Modo demo · Configura Firebase para datos reales');
+}
+
+// ============================================================
+// FIREBASE
+// ============================================================
+function cargarDatosFirebase() {
+  // Puntos
+  db.collection('puntos').orderBy('timestamp','desc').onSnapshot(snap => {
+    if (!snap.empty) {
+      datosActuales.puntos = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      renderPuntos(datosActuales.puntos);
+      actualizarMapaMarcadores();
+    }
+  });
+  
+  // Desaparecidos
+  db.collection('desaparecidos').orderBy('timestamp','desc').onSnapshot(snap => {
+    if (!snap.empty) {
+      datosActuales.desaparecidos = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      renderDesaparecidos(datosActuales.desaparecidos);
+      actualizarStats();
+    }
+  });
+  
+  // Insumos
+  db.collection('insumos').onSnapshot(snap => {
+    if (!snap.empty) {
+      datosActuales.insumos = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      renderInsumos(datosActuales.insumos);
+    }
+  });
+  
+  // Voluntarios
+  db.collection('voluntarios').onSnapshot(snap => {
+    if (!snap.empty) {
+      datosActuales.voluntarios = snap.docs.map(d => ({id:d.id, ...d.data()}));
+      renderVoluntariosLista(datosActuales.voluntarios);
+      actualizarStats();
+    }
+  });
+}
+
+async function guardarEnFirebase(coleccion, datos) {
+  if (!usandoFirebase || !db) return false;
+  try {
+    datos.timestamp = firebase.firestore.FieldValue.serverTimestamp();
+    datos.verificado = false;
+    await db.collection(coleccion).add(datos);
+    return true;
+  } catch(e) {
+    console.error('Error guardando:', e);
+    return false;
+  }
+}
+
+// ============================================================
+// MAPA
+// ============================================================
+function inicializarMapa() {
+  if (mapa) return;
+  try {
+    mapa = L.map('map', {
+      center: [8.0, -66.0],
+      zoom: 6,
+      zoomControl: true,
+      attributionControl: false
+    });
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap',
+      maxZoom: 18
+    }).addTo(mapa);
+    
+    actualizarMapaMarcadores();
+  } catch(e) {
+    console.error('Error mapa:', e);
+  }
+}
+
+function actualizarMapaMarcadores() {
+  if (!mapa) return;
+  
+  // Limpiar marcadores anteriores
+  marcadores.forEach(m => mapa.removeLayer(m));
+  marcadores = [];
+  
+  const colores = {critico:'#8B0000', medio:'#d4700a', cubierto:'#2d7a2d'};
+  
+  datosActuales.puntos.forEach(p => {
+    if (!p.lat || !p.lng) return;
+    
+    const color = colores[p.estado] || '#888';
+    const icono = L.divIcon({
+      html: `<div style="width:14px;height:14px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 4px rgba(0,0,0,.4)"></div>`,
+      iconSize:[14,14],
+      iconAnchor:[7,7],
+      className:''
+    });
+    
+    const marker = L.marker([p.lat, p.lng], {icon: icono})
+      .bindPopup(`<b>${p.nombre}</b><br>${p.zona}<br><small>${p.personas} personas</small>`)
+      .addTo(mapa);
+    
+    marker.on('click', () => verDetallePunto(p.id));
+    marcadores.push(marker);
+  });
+}
+
+// ============================================================
+// RENDER PUNTOS
+// ============================================================
+function renderPuntos(puntos) {
+  const el = document.getElementById('lista-puntos');
+  if (!puntos.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">📍</div><div class="empty-title">Sin puntos registrados</div><div class="empty-desc">Sé el primero en reportar un punto de necesidad.</div></div>`;
+    return;
+  }
+  
+  el.innerHTML = puntos.map(p => `
+    <div class="card" onclick="verDetallePunto('${p.id}')">
+      <div class="card-header">
+        <div>
+          <div class="card-title">${p.nombre}</div>
+          <div class="card-sub">📍 ${p.zona}</div>
+          <div class="card-sub" style="margin-top:3px">👥 ${p.personas} personas · 🤝 ${p.voluntarios} voluntarios</div>
+        </div>
+        <span class="badge ${p.estado}">${estadoLabel(p.estado)}</span>
+      </div>
+      <div class="necesidades">
+        ${(p.necesidades||[]).map(n => `
+          <div class="nec-item"><div class="nec-dot ${n.nivel}"></div>${n.item}</div>
+        `).join('')}
+      </div>
+      <div class="share-bar">
+        <button class="share-btn share-wa" onclick="event.stopPropagation();compartirWA(${JSON.stringify(p).replace(/"/g,'&quot;')})">📱 WhatsApp</button>
+        <button class="share-btn share-copy" onclick="event.stopPropagation();copiarInfo('${p.id}')">📋 Copiar</button>
+      </div>
+    </div>
+  `).join('');
+  
+  // También actualizar mapa lateral
+  document.getElementById('mapa-puntos-lista').innerHTML = 
+    `<div class="section-header"><span class="section-h">Puntos activos</span><span class="section-count">${puntos.length}</span></div>` +
+    puntos.slice(0,3).map(p => `
+      <div class="card" onclick="verDetallePunto('${p.id}')">
+        <div class="card-header">
+          <div>
+            <div class="card-title">${p.nombre}</div>
+            <div class="card-sub">📍 ${p.zona}</div>
+          </div>
+          <span class="badge ${p.estado}">${estadoLabel(p.estado)}</span>
+        </div>
+      </div>
+    `).join('') +
+    `<div style="text-align:center;padding:8px 0 16px"><button class="btn btn-ghost btn-sm" onclick="verTab('puntos')">Ver todos los puntos →</button></div>`;
+}
+
+function filtrarPuntos(q) {
+  if (!q) return renderPuntos(datosActuales.puntos);
+  const f = datosActuales.puntos.filter(p =>
+    p.nombre.toLowerCase().includes(q.toLowerCase()) ||
+    p.zona.toLowerCase().includes(q.toLowerCase())
+  );
+  renderPuntos(f);
+}
+
+function verDetallePunto(id) {
+  const p = datosActuales.puntos.find(x => x.id === id);
+  if (!p) return;
+  
+  document.getElementById('detalle-punto').innerHTML = `
+    <div class="modal-title">${p.nombre}</div>
+    <span class="badge ${p.estado}" style="margin-bottom:12px;display:inline-flex">${estadoLabel(p.estado)}</span>
+    <div class="contact-row"><span class="contact-icon">📍</span> ${p.zona}</div>
+    <div class="contact-row"><span class="contact-icon">👥</span> ${p.personas} personas refugiadas</div>
+    <div class="contact-row"><span class="contact-icon">🤝</span> ${p.voluntarios} voluntarios presentes</div>
+    <div class="contact-row"><span class="contact-icon">📞</span> <a href="tel:${p.contacto}" style="color:#8B0000">${p.contacto}</a></div>
+    <div style="margin-top:12px;margin-bottom:6px;font-size:12px;font-weight:700;color:#555">NECESITAN CON URGENCIA:</div>
+    <div class="necesidades" style="padding:0 0 12px">
+      ${(p.necesidades||[]).map(n => `<div class="nec-item"><div class="nec-dot ${n.nivel}"></div>${n.item}</div>`).join('')}
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px">
+      <a href="tel:${p.contacto}" class="btn btn-rojo btn-full">📞 Llamar al coordinador</a>
+      <button class="btn btn-outline btn-full" onclick="compartirWA(${JSON.stringify(p).replace(/"/g,'&quot;')})">📱 Compartir por WhatsApp</button>
+      <a href="https://maps.google.com/?q=${p.lat},${p.lng}" target="_blank" class="btn btn-ghost btn-full">🗺️ Ver en Google Maps</a>
+    </div>
+  `;
+  abrirModal('modal-punto');
+}
+
+// ============================================================
+// RENDER DESAPARECIDOS
+// ============================================================
+function renderDesaparecidos(lista) {
+  let f = lista;
+  if (filtroDesapActivo === 'buscado') f = lista.filter(d => !d.encontrado);
+  if (filtroDesapActivo === 'encontrado') f = lista.filter(d => d.encontrado);
+  if (filtroDesapActivo === 'menor') f = lista.filter(d => d.edad < 18);
+  if (filtroDesapActivo === 'adulto-mayor') f = lista.filter(d => d.edad >= 60);
+  
+  const q = document.getElementById('search-desap')?.value || '';
+  if (q) f = f.filter(d => d.nombre.toLowerCase().includes(q.toLowerCase()) || d.zona.toLowerCase().includes(q.toLowerCase()));
+  
+  const el = document.getElementById('lista-desap');
+  
+  if (!f.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No hay registros en esta categoría</div><div class="empty-desc">Puedes reportar una persona desaparecida con el botón + arriba.</div></div>`;
+    return;
+  }
+  
+  el.innerHTML = f.map(d => {
+    const ini = d.nombre.split(' ').map(x=>x[0]).join('').substring(0,2);
+    const colores = ['#8B0000','#1a5fa8','#d4700a','#2d7a2d','#6B3FA0'];
+    const col = colores[d.nombre.charCodeAt(0) % colores.length];
+    return `
+    <div class="card">
+      <div class="missing-card">
+        <div class="missing-avatar" style="background:${col}">${ini}</div>
+        <div class="missing-info">
+          <div class="missing-name">${d.nombre} <span class="badge ${d.encontrado?'encontrado':'buscado'}" style="font-size:10px">${d.encontrado?'✓ Encontrado':'Buscado'}</span></div>
+          <div class="missing-detail">${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}</div>
+          <div class="missing-detail">📍 Última vez: ${d.zona}</div>
+          <div class="missing-detail">📅 ${d.fecha} · ${d.ropa}</div>
+          ${d.seña?`<div class="missing-detail" style="color:#8B0000">⚠️ ${d.seña}</div>`:''}
+        </div>
+      </div>
+      <div class="missing-btn">
+        <a href="tel:${d.contacto}" class="btn btn-rojo btn-sm" style="flex:1">📞 ${d.contacto}</a>
+        <button class="btn btn-outline btn-sm" style="flex:1" onclick="compartirDesap(${JSON.stringify(d).replace(/"/g,'&quot;')})">📱 Compartir</button>
+        ${!d.encontrado?`<button class="btn btn-verde btn-sm" style="flex:1" onclick="marcarEncontrado('${d.id}')">✅ Encontrado</button>`:''}
+      </div>
+    </div>
+  `}).join('');
+}
+
+function filtroDesap(tipo) {
+  filtroDesapActivo = tipo;
+  document.querySelectorAll('.itab').forEach(b => {
+    if (b.closest('#sec-desaparecidos')) b.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  renderDesaparecidos(datosActuales.desaparecidos);
+}
+
+function filtrarDesap(q) {
+  renderDesaparecidos(datosActuales.desaparecidos);
+}
+
+function marcarEncontrado(id) {
+  const d = datosActuales.desaparecidos.find(x => x.id === id);
+  if (d) {
+    d.encontrado = true;
+    if (usandoFirebase && db) {
+      db.collection('desaparecidos').doc(id).update({encontrado: true});
+    }
+    renderDesaparecidos(datosActuales.desaparecidos);
+    actualizarStats();
+    mostrarToast('✅ ¡Gracias a Dios! Persona marcada como encontrada');
+  }
+}
+
+// ============================================================
+// RENDER INSUMOS
+// ============================================================
+function renderInsumos(lista) {
+  let f = lista;
+  if (filtroInsumoActivo !== 'todos') {
+    if (filtroInsumoActivo === 'urgente') f = lista.filter(i => (i.stock/i.necesario) < 0.25);
+    else f = lista.filter(i => i.tipo === filtroInsumoActivo);
+  }
+  
+  const el = document.getElementById('lista-insumos');
+  const coloresBarra = (pct) => pct < 0.25 ? '#8B0000' : pct < 0.6 ? '#d4700a' : '#2d7a2d';
+  
+  el.innerHTML = `<div class="card">` + f.map(i => {
+    const pct = Math.min(1, i.stock / i.necesario);
+    const pctNum = Math.round(pct * 100);
+    const color = coloresBarra(pct);
+    const urgente = pct < 0.25;
+    return `
+    <div class="insumo-row">
+      <div class="insumo-icon">${i.cat}</div>
+      <div class="insumo-info">
+        <div class="insumo-name">${i.nombre} ${urgente?'<span class="badge urgente" style="font-size:10px">Urgente</span>':''}</div>
+        <div class="insumo-sub">${i.stock.toLocaleString()} de ${i.necesario.toLocaleString()} ${i.sub}</div>
+        <div class="progress-wrap">
+          <div class="progress-bar"><div class="progress-fill" style="width:${pctNum}%;background:${color}"></div></div>
+          <span class="progress-pct" style="color:${color}">${pctNum}%</span>
+        </div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="donarInsumo('${i.id}','${i.nombre}')">Donar</button>
+    </div>
+  `}).join('') + `</div>`;
+}
+
+function filtroInsumo(tipo) {
+  filtroInsumoActivo = tipo;
+  document.querySelectorAll('.itab').forEach(b => {
+    if (b.closest('#sec-insumos')) b.classList.remove('active');
+  });
+  event.target.classList.add('active');
+  renderInsumos(datosActuales.insumos);
+}
+
+function donarInsumo(id, nombre) {
+  const msg = encodeURIComponent(`Hola, quiero donar ${nombre} para los damnificados del terremoto. ¿Cómo puedo coordinar la entrega? (Referencia: AyudaVE)`);
+  window.open(`https://wa.me/?text=${msg}`, '_blank');
+}
+
+// ============================================================
+// RENDER VOLUNTARIOS
+// ============================================================
+function renderVoluntariosLista(lista) {
+  const el = document.getElementById('lista-voluntarios');
+  if (!lista.length) { el.innerHTML = ''; return; }
+  
+  el.innerHTML = `
+    <div class="section-header"><span class="section-h">Voluntarios activos</span><span class="section-count">${lista.length}</span></div>
+    ${lista.map(v => `
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">${v.nombre}</div>
+            <div class="card-sub">📍 ${v.zona} · ${v.vehiculo !== 'no' ? '🚗 Con vehículo' : '🚶 Sin vehículo'}</div>
+          </div>
+          <span class="badge cubierto">Activo</span>
+        </div>
+        <div class="necesidades">
+          ${(v.habilidades||[]).map(h => `<div class="nec-item"><div class="nec-dot baja"></div>${h}</div>`).join('')}
+        </div>
+      </div>
+    `).join('')}
+  `;
+}
+
+// ============================================================
+// FORMULARIOS
+// ============================================================
+function abrirFormulario(tipo) {
+  cerrarModal('modal-reportar');
+  setTimeout(() => {
+    const forms = {
+      punto: formPunto(),
+      desaparecido: formDesaparecido(),
+      encontrado: formEncontrado(),
+      donacion: formDonacion()
+    };
+    document.getElementById('form-contenido').innerHTML = forms[tipo] || '';
+    abrirModal('modal-form');
+  }, 200);
+}
+
+function formPunto() {
+  const estadosOpts = ESTADOS_VE.map(e => `<option>${e}</option>`).join('');
+  return `
+    <div class="form-title">📍 Nuevo punto de necesidad</div>
+    <div class="form-group">
+      <label class="form-label">Nombre del lugar</label>
+      <input class="form-input" id="fp-nombre" placeholder="Ej: Escuela Básica Nacional..." required>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Estado</label>
+        <select class="form-select" id="fp-estado"><option value="">Estado...</option>${estadosOpts}</select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ciudad / Municipio</label>
+        <input class="form-input" id="fp-ciudad" placeholder="Ej: Barquisimeto">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">¿Qué necesitan urgente? (separa con comas)</label>
+      <textarea class="form-input" id="fp-necesidades" placeholder="Ej: Agua potable, medicamentos, colchones..."></textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Personas aprox.</label>
+        <input class="form-input" type="number" id="fp-personas" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Voluntarios</label>
+        <input class="form-input" type="number" id="fp-voluntarios" placeholder="0">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Teléfono de contacto</label>
+      <input class="form-input" type="tel" id="fp-contacto" placeholder="04XX-XXXXXXX">
+    </div>
+    <button class="btn btn-rojo btn-full" onclick="enviarPunto()" style="margin-bottom:8px">📍 Registrar punto</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="cerrarModal('modal-form')">Cancelar</button>
+  `;
+}
+
+function formDesaparecido() {
+  const estadosOpts = ESTADOS_VE.map(e => `<option>${e}</option>`).join('');
+  return `
+    <div class="form-title">🔍 Reportar persona desaparecida</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Nombre completo</label>
+        <input class="form-input" id="fd-nombre" placeholder="Nombre y apellido">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Edad</label>
+        <input class="form-input" type="number" id="fd-edad" placeholder="Años">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Sexo</label>
+        <select class="form-select" id="fd-sexo"><option value="F">Femenino</option><option value="M">Masculino</option></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Fecha desaparición</label>
+        <input class="form-input" type="date" id="fd-fecha">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Última vez visto(a) en</label>
+      <input class="form-input" id="fd-zona" placeholder="Lugar específico">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Ropa que llevaba</label>
+      <input class="form-input" id="fd-ropa" placeholder="Descripción de la vestimenta">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Señas particulares</label>
+      <input class="form-input" id="fd-sena" placeholder="Cicatrices, tatuajes, lentes...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Teléfono familiar (para contacto)</label>
+      <input class="form-input" type="tel" id="fd-contacto" placeholder="04XX-XXXXXXX">
+    </div>
+    <button class="btn btn-rojo btn-full" onclick="enviarDesaparecido()" style="margin-bottom:8px">🔍 Publicar búsqueda</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="cerrarModal('modal-form')">Cancelar</button>
+  `;
+}
+
+function formEncontrado() {
+  return `
+    <div class="form-title">✅ Reportar persona encontrada</div>
+    <div class="alert-banner info" style="margin:0 0 12px">
+      <div class="alert-icon">ℹ️</div>
+      <div>Si encontraste a alguien que está en nuestra lista de desaparecidos, repórtalo aquí.</div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Nombre de la persona encontrada</label>
+      <input class="form-input" id="fe-nombre" placeholder="Nombre completo">
+    </div>
+    <div class="form-group">
+      <label class="form-label">¿Dónde fue encontrada?</label>
+      <input class="form-input" id="fe-donde" placeholder="Lugar o albergue donde está">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Estado de salud</label>
+      <select class="form-select" id="fe-salud">
+        <option>Bien, sin lesiones</option>
+        <option>Lesiones leves</option>
+        <option>Necesita atención médica</option>
+        <option>Urgencia médica</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tu teléfono (para verificar)</label>
+      <input class="form-input" type="tel" id="fe-contacto" placeholder="04XX-XXXXXXX">
+    </div>
+    <button class="btn btn-verde btn-full" onclick="enviarEncontrado()" style="margin-bottom:8px">✅ Confirmar localización</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="cerrarModal('modal-form')">Cancelar</button>
+  `;
+}
+
+function formDonacion() {
+  const insumos = ['Agua potable','Alimentos no perecederos','Medicamentos','Ropa','Colchones/Cobijas','Pañales','Leche fórmula','Material médico','Otro'];
+  return `
+    <div class="form-title">📦 Ofrecer donación</div>
+    <div class="form-group">
+      <label class="form-label">¿Qué puedes donar?</label>
+      <select class="form-select" id="don-tipo">${insumos.map(i=>`<option>${i}</option>`).join('')}</select>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="form-label">Cantidad</label>
+        <input class="form-input" type="number" id="don-cantidad" placeholder="0">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Unidad</label>
+        <input class="form-input" id="don-unidad" placeholder="Cajas, kg, litros...">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">¿Dónde está la donación?</label>
+      <input class="form-input" id="don-donde" placeholder="Ciudad y referencia de entrega">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Tu nombre y teléfono</label>
+      <input class="form-input" id="don-contacto" placeholder="Nombre · 04XX-XXXXXXX">
+    </div>
+    <button class="btn btn-rojo btn-full" onclick="enviarDonacion()" style="margin-bottom:8px">📦 Registrar donación</button>
+    <button class="btn btn-ghost btn-full btn-sm" onclick="cerrarModal('modal-form')">Cancelar</button>
+  `;
+}
+
+// ============================================================
+// ENVÍO DE FORMULARIOS
+// ============================================================
+async function enviarPunto() {
+  const nombre = document.getElementById('fp-nombre')?.value?.trim();
+  const estado = document.getElementById('fp-estado')?.value;
+  const ciudad = document.getElementById('fp-ciudad')?.value?.trim();
+  const nec = document.getElementById('fp-necesidades')?.value?.trim();
+  const contacto = document.getElementById('fp-contacto')?.value?.trim();
+  
+  if (!nombre || !estado || !ciudad) {
+    mostrarToast('⚠️ Completa nombre, estado y ciudad');
+    return;
+  }
+  
+  const datos = {
+    nombre, estado, ciudad,
+    zona: `${ciudad}, ${estado}`,
+    personas: parseInt(document.getElementById('fp-personas')?.value) || 0,
+    voluntarios: parseInt(document.getElementById('fp-voluntarios')?.value) || 0,
+    contacto,
+    estado_punto: 'critico',
+    necesidades: (nec || '').split(',').map(s => ({item: s.trim(), nivel:'alta'})).filter(n => n.item),
+    lat: null, lng: null
+  };
+  
+  const ok = await guardarEnFirebase('puntos', datos);
+  
+  if (!ok) {
+    // Modo demo: agregar localmente
+    datos.id = 'local-' + Date.now();
+    datos.estado = 'critico';
+    datosActuales.puntos.unshift(datos);
+    renderPuntos(datosActuales.puntos);
+    actualizarStats();
+  }
+  
+  cerrarModal('modal-form');
+  mostrarToast('✅ Punto registrado. ¡Gracias por reportar!');
+  verTab('puntos');
+}
+
+async function enviarDesaparecido() {
+  const nombre = document.getElementById('fd-nombre')?.value?.trim();
+  const edad = document.getElementById('fd-edad')?.value;
+  const contacto = document.getElementById('fd-contacto')?.value?.trim();
+  const zona = document.getElementById('fd-zona')?.value?.trim();
+  
+  if (!nombre || !zona || !contacto) {
+    mostrarToast('⚠️ Completa nombre, zona y contacto');
+    return;
+  }
+  
+  const datos = {
+    nombre,
+    edad: parseInt(edad) || 0,
+    sexo: document.getElementById('fd-sexo')?.value || 'M',
+    fecha: document.getElementById('fd-fecha')?.value || new Date().toLocaleDateString('es-VE'),
+    zona,
+    ropa: document.getElementById('fd-ropa')?.value?.trim() || '',
+    seña: document.getElementById('fd-sena')?.value?.trim() || '',
+    contacto,
+    encontrado: false
+  };
+  
+  const ok = await guardarEnFirebase('desaparecidos', datos);
+  
+  if (!ok) {
+    datos.id = 'local-' + Date.now();
+    datosActuales.desaparecidos.unshift(datos);
+    renderDesaparecidos(datosActuales.desaparecidos);
+    actualizarStats();
+  }
+  
+  cerrarModal('modal-form');
+  mostrarToast('🔍 Búsqueda publicada. Dios guíe el encuentro.');
+  verTab('desaparecidos');
+}
+
+async function enviarEncontrado() {
+  const nombre = document.getElementById('fe-nombre')?.value?.trim();
+  const donde = document.getElementById('fe-donde')?.value?.trim();
+  const contacto = document.getElementById('fe-contacto')?.value?.trim();
+  
+  if (!nombre || !donde) {
+    mostrarToast('⚠️ Completa nombre y lugar');
+    return;
+  }
+  
+  // Buscar coincidencia
+  const match = datosActuales.desaparecidos.find(d => 
+    d.nombre.toLowerCase().includes(nombre.toLowerCase().split(' ')[0])
+  );
+  
+  if (match) {
+    marcarEncontrado(match.id);
+  } else {
+    mostrarToast('✅ Reporte enviado para revisión. ¡Aleluya!');
+  }
+  
+  cerrarModal('modal-form');
+}
+
+async function enviarDonacion() {
+  const tipo = document.getElementById('don-tipo')?.value;
+  const donde = document.getElementById('don-donde')?.value?.trim();
+  const contacto = document.getElementById('don-contacto')?.value?.trim();
+  
+  if (!donde || !contacto) {
+    mostrarToast('⚠️ Completa dónde está y tu contacto');
+    return;
+  }
+  
+  const datos = {
+    tipo,
+    cantidad: parseInt(document.getElementById('don-cantidad')?.value) || 0,
+    unidad: document.getElementById('don-unidad')?.value?.trim() || '',
+    donde,
+    contacto,
+    estado: 'disponible'
+  };
+  
+  await guardarEnFirebase('donaciones', datos);
+  cerrarModal('modal-form');
+  mostrarToast('📦 Donación registrada. ¡Dios te bendiga!');
+}
+
+async function registrarVoluntario() {
+  const nombre = document.getElementById('vol-nombre')?.value?.trim();
+  const estado = document.getElementById('vol-estado')?.value;
+  const tel = document.getElementById('vol-tel')?.value?.trim();
+  
+  if (!nombre || !estado || !tel) {
+    mostrarToast('⚠️ Completa nombre, estado y teléfono');
+    return;
+  }
+  
+  const habs = Array.from(document.querySelectorAll('.hab-check:checked')).map(c => c.value);
+  
+  const datos = {
+    nombre, estado, zona: estado, tel,
+    habilidades: habs,
+    vehiculo: document.getElementById('vol-vehiculo')?.value || 'no',
+    disponible: true
+  };
+  
+  const ok = await guardarEnFirebase('voluntarios', datos);
+  
+  if (!ok) {
+    datos.id = 'local-' + Date.now();
+    datosActuales.voluntarios.push(datos);
+    renderVoluntariosLista(datosActuales.voluntarios);
+    actualizarStats();
+  }
+  
+  // Limpiar form
+  document.getElementById('vol-nombre').value = '';
+  document.getElementById('vol-tel').value = '';
+  mostrarToast('🤝 ¡Registrado! Venezuela te necesita. Gracias.');
+}
+
+// ============================================================
+// COMPARTIR
+// ============================================================
+function compartirWA(punto) {
+  const texto = `🚨 *PUNTO DE NECESIDAD - TERREMOTO VENEZUELA*\n\n📍 *${punto.nombre}*\n📌 ${punto.zona}\n👥 ${punto.personas} personas refugiadas\n\n⚠️ *NECESITAN:*\n${(punto.necesidades||[]).map(n=>`• ${n.item}`).join('\n')}\n\n📞 Contacto: ${punto.contacto}\n\n🔗 Ver más en: https://ayudave.org\n\n*Comparte para que llegue la ayuda* 🇻🇪`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+}
+
+function compartirDesap(d) {
+  const texto = `🔍 *SE BUSCA - TERREMOTO VENEZUELA*\n\n👤 *${d.nombre}*\n🎂 ${d.edad} años · ${d.sexo==='F'?'Femenino':'Masculino'}\n📍 Última vez en: ${d.zona}\n📅 Desde: ${d.fecha}\n👕 Ropa: ${d.ropa}\n${d.seña?`⚠️ ${d.seña}\n`:''}\n📞 Contactar: ${d.contacto}\n\n🙏 Por favor comparte esta información. Un retuit puede reunir a una familia.\n\n🔗 https://ayudave.org`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank');
+}
+
+function copiarInfo(id) {
+  const p = datosActuales.puntos.find(x => x.id === id);
+  if (!p) return;
+  const texto = `${p.nombre} - ${p.zona}\nNecesitan: ${(p.necesidades||[]).map(n=>n.item).join(', ')}\nContacto: ${p.contacto}\nwww.ayudave.org`;
+  navigator.clipboard?.writeText(texto).then(() => mostrarToast('📋 Información copiada'));
+}
+
+// ============================================================
+// STATS
+// ============================================================
+function actualizarStats() {
+  const criticos = datosActuales.puntos.filter(p => p.estado === 'critico').length;
+  const buscados = datosActuales.desaparecidos.filter(d => !d.encontrado).length;
+  const encontrados = datosActuales.desaparecidos.filter(d => d.encontrado).length;
+  const voluntarios = datosActuales.voluntarios.length + 244;
+  
+  document.getElementById('st-criticos').textContent = criticos || datosActuales.stats?.criticos || 0;
+  document.getElementById('st-buscados').textContent = buscados || datosActuales.stats?.buscados || 0;
+  document.getElementById('st-encontrados').textContent = encontrados || datosActuales.stats?.encontrados || 0;
+  document.getElementById('st-voluntarios').textContent = voluntarios || datosActuales.stats?.voluntarios || 0;
+}
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function verTab(tab) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById(`sec-${tab}`).classList.add('active');
+  document.getElementById(`tab-${tab}`).classList.add('active');
+  
+  if (tab === 'mapa' && mapa) {
+    setTimeout(() => mapa.invalidateSize(), 100);
+  }
+}
+
+function abrirModal(id) {
+  document.getElementById(id).classList.add('show');
+  document.body.style.overflow = 'hidden';
+}
+
+function cerrarModal(id) {
+  document.getElementById(id).classList.remove('show');
+  document.body.style.overflow = '';
+}
+
+function abrirReportar() {
+  abrirModal('modal-reportar');
+}
+
+function mostrarToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function estadoLabel(e) {
+  return {critico:'⚠️ Crítico', medio:'◈ Necesita ayuda', cubierto:'✓ Cubierto'}[e] || e;
+}
+
+function poblarEstados() {
+  const selects = ['vol-estado', 'fp-estado'];
+  selects.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = `<option value="">Seleccionar estado...</option>` + ESTADOS_VE.map(e => `<option value="${e}">${e}</option>`).join('');
+  });
+}
+
+function poblarHabilidades() {
+  const el = document.getElementById('habilidades-check');
+  if (!el) return;
+  el.innerHTML = HABILIDADES.map(h => `
+    <label style="display:flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid #e0e0d8;font-size:12px;cursor:pointer;user-select:none;background:#fafaf8">
+      <input type="checkbox" class="hab-check" value="${h}" style="width:14px;height:14px;accent-color:#8B0000"> ${h}
+    </label>
+  `).join('');
+}
+
+// ============================================================
+// SERVICE WORKER (PWA - funciona offline)
+// ============================================================
+if ('serviceWorker' in navigator) {
+  const swCode = `
+    const CACHE = 'ayudave-v1';
+    const ASSETS = ['/'];
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+    });
+    self.addEventListener('fetch', e => {
+      e.respondWith(
+        caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('/')))
+      );
+    });
+  `;
+  const blob = new Blob([swCode], {type:'text/javascript'});
+  const url = URL.createObjectURL(blob);
+  navigator.serviceWorker.register(url).catch(() => {});
+}
+
+// ============================================================
+// CERRAR MODALES CON ESC
+// ============================================================
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    ['modal-form','modal-punto','modal-reportar'].forEach(id => cerrarModal(id));
+  }
+});
+
+</script>
+</body>
+</html>
