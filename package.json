@@ -1,0 +1,33 @@
+{
+  "name": "rifalo",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Rifalo: gestión de rifas con vendedores, pagos y sorteos",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-rifalo",
+    "test:rules": "firebase emulators:exec --only firestore --project demo-rifalo \"node --test tests/rules.test.mjs\"",
+    "deploy": "npm run build && firebase deploy --only hosting,firestore --project ayudave-81546"
+  },
+  "dependencies": {
+    "canvas-confetti": "^1.9.4",
+    "firebase": "^12.19.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "qrcode": "^1.5.4",
+    "vue": "^3.5.43",
+    "vue-router": "^4.6.4",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.2",
+    "@vitejs/plugin-vue": "^6.0.9",
+    "firebase-admin": "^14.5.0",
+    "firebase-tools": "^15.32.1",
+    "playwright-core": "^1.63.0",
+    "vite": "^6.4.3"
+  }
+}

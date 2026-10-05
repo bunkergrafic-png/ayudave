@@ -1,0 +1,205 @@
+rules_version = '2';
+
+// Rifalo — reglas de seguridad de Firestore.
+//
+// Roles (users/{uid}.role):
+//   super  → dueño de la plataforma, ve y controla todo.
+//   owner  → organizador: administra las rifas de su organización (orgId).
+//   member → persona del equipo de una organización. En cada rifa puede ser
+//            co-admin (raffle.coadmins) o vendedor (raffle.sellers).
+// Los miembros se identifican por `mid` (estable aunque se le cambie la clave).
+// El público usa sesión anónima para apartar números desde la página pública.
+
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    // ───────── Identidad ─────────
+    function signed() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function userPath(u) { return /databases/$(db)/documents/users/$(u); }
+    function hasProfile() { return signed() && exists(userPath(uid())); }
+    function me() { return get(userPath(uid())).data; }
+    function active() { return hasProfile() && me().active == true; }
+    function isSuper() { return active() && me().role == 'super'; }
+    function ownsOrg(orgId) { return active() && me().role == 'owner' && me().orgId == orgId; }
+    function now() { return request.time.toMillis(); }
+
+    // ───────── Rifas ─────────
+    function raffle(rid) { return get(/databases/$(db)/documents/raffles/$(rid)).data; }
+    function inOrg(r) { return active() && me().orgId == r.orgId; }
+    function isAdminOf(r) { return isSuper() || ownsOrg(r.orgId) || (inOrg(r) && me().mid in r.coadmins); }
+    function isSellerOf(r) { return inOrg(r) && me().mid in r.sellers; }
+    function isStaffOf(r) { return isAdminOf(r) || isSellerOf(r); }
+    function isPublic(r) { return r.public.enabled == true && r.status in ['active', 'closed', 'drawn']; }
+    function canSell(r) { return isAdminOf(r) ? r.status in ['active', 'closed'] : (isSellerOf(r) && r.status == 'active'); }
+    function publicOpen(r) { return isPublic(r) && r.status == 'active' && r.public.allowReserve == true; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+
+    match /raffles/{rid} {
+      allow get: if isPublic(resource.data) || isStaffOf(resource.data);
+      allow list: if isSuper() || ownsOrg(resource.data.orgId) || isStaffOf(resource.data);
+      allow create: if (isSuper() || ownsOrg(request.resource.data.orgId))
+        && request.resource.data.coadmins is list && request.resource.data.sellers is list;
+      allow update: if isAdminOf(resource.data)
+        && request.resource.data.orgId == resource.data.orgId
+        && (isSuper() || ownsOrg(resource.data.orgId) || !changed().hasAny(['coadmins', 'orgId']));
+      allow delete: if isSuper() || ownsOrg(resource.data.orgId);
+
+      // Tablero: cada documento guarda el estado compacto de hasta 500 números.
+      //   { "45": { s: 'r'|'v'|'p', o: orderId, sl: mid|'', e: vencimientoMs|0, a: tieneAbono } }
+      match /chunks/{cid} {
+        allow read: if isPublic(raffle(rid)) || isStaffOf(raffle(rid));
+        allow create, delete: if isAdminOf(raffle(rid));
+        allow update: if (hasProfile() && canSell(raffle(rid))) || (!hasProfile() && publicReserve());
+
+        // Apartado público: solo números libres (o vencidos) → estado 'r' con vencimiento corto.
+        // El documento marca la orden en `_o`; la orden trae la lista de números (`keys`).
+        function okEntry(k, oid, lim, sellers, size) {
+          let o = resource.data;
+          let n = request.resource.data[k];
+          return (!(k in o) || (o[k].s != 'p' && o[k].a != true && o[k].e > 0 && o[k].e < request.time.toMillis()))
+            && n.keys().hasOnly(['s', 'o', 'sl', 'e', 'a'])
+            && n.s == 'r' && n.a == false && n.o == oid
+            && n.e is int && n.e > request.time.toMillis() && n.e <= lim
+            && (n.sl == '' || n.sl in sellers)
+            && int(k) >= 1 && int(k) <= size;
+        }
+        // Los números de la orden que viven en otro documento del tablero se validan en ese documento.
+        function keyOk(ks, i, oid, lim, sellers, size) { return ks.size() <= i || !(ks[i] in request.resource.data) || okEntry(ks[i], oid, lim, sellers, size); }
+        function publicReserve() {
+          let r = raffle(rid);
+          let oid = request.resource.data._o;
+          let order = getAfter(/databases/$(db)/documents/raffles/$(rid)/orders/$(oid)).data;
+          let ks = order.keys;
+          let lim = request.time.toMillis() + r.public.holdMinutes * 60000 + 600000;
+          return signed() && publicOpen(r)
+            && order.source == 'public' && order.createdBy == uid()
+            && ks.size() >= 1 && ks.size() <= 5
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(ks.concat(['_o']))
+            && keyOk(ks, 0, oid, lim, r.sellers, r.size) && keyOk(ks, 1, oid, lim, r.sellers, r.size)
+            && keyOk(ks, 2, oid, lim, r.sellers, r.size) && keyOk(ks, 3, oid, lim, r.sellers, r.size)
+            && keyOk(ks, 4, oid, lim, r.sellers, r.size);
+        }
+      }
+
+      // Órdenes (una venta o apartado de uno o varios números para un comprador).
+      match /orders/{oid} {
+        function sellerOwns(r) { return isSellerOf(r) && resource.data.sellerId == me().mid; }
+        function sellerInbox(r) { return isSellerOf(r) && resource.data.sellerId == ''; }
+        allow read: if isAdminOf(raffle(rid)) || sellerOwns(raffle(rid)) || sellerInbox(raffle(rid))
+          || (signed() && resource.data.createdBy == uid());
+        allow create: if (hasProfile() && canSell(raffle(rid)) && request.resource.data.createdBy == uid())
+          || (!hasProfile() && publicOrder(raffle(rid)));
+        allow update: if isAdminOf(raffle(rid))
+          || (isSellerOf(raffle(rid)) && raffle(rid).status in ['active', 'closed']
+              && (resource.data.sellerId == me().mid
+                  || (resource.data.sellerId == '' && request.resource.data.sellerId == me().mid))
+              && request.resource.data.sellerId == me().mid
+              && (raffle(rid).cashSelfConfirm == true
+                  || request.resource.data.paidVerified == resource.data.paidVerified));
+        allow delete: if isAdminOf(raffle(rid));
+
+        function publicOrder(r) {
+          let d = request.resource.data;
+          return signed() && publicOpen(r)
+            && d.source == 'public' && d.status == 'reserved' && d.createdBy == uid()
+            && d.numbers is list && d.numbers.size() >= 1 && d.numbers.size() <= r.public.maxPerOrder && d.numbers.size() <= 5
+            && d.keys is list && d.keys.size() == d.numbers.size()
+            && (d.sellerId == '' || d.sellerId in r.sellers)
+            && d.paidVerified == 0 && d.paidPending == 0
+            && d.buyer.name is string && d.buyer.name.size() > 1 && d.buyer.phone is string
+            && !exists(/databases/$(db)/documents/raffles/$(rid)/blocked/$(d.buyer.phone));
+        }
+      }
+
+      match /payments/{pid} {
+        allow read: if isAdminOf(raffle(rid))
+          || (isSellerOf(raffle(rid)) && resource.data.sellerId == me().mid);
+        allow create: if canSell(raffle(rid)) && request.resource.data.createdBy == uid()
+          && (request.resource.data.status == 'pending'
+              || (request.resource.data.status == 'verified'
+                  && (isAdminOf(raffle(rid))
+                      || (raffle(rid).cashSelfConfirm == true && request.resource.data.method == 'cash'))));
+        allow update, delete: if isAdminOf(raffle(rid));
+      }
+
+      match /receipts/{pid} {
+        allow read: if isAdminOf(raffle(rid)) || (signed() && resource.data.createdBy == uid());
+        allow create: if canSell(raffle(rid)) && request.resource.data.createdBy == uid()
+          && request.resource.data.data is string && request.resource.data.data.size() < 600000;
+        allow delete: if isAdminOf(raffle(rid));
+      }
+
+      // Referencias bancarias usadas (detecta pagos duplicados).
+      match /refs/{ref} {
+        allow get: if isStaffOf(raffle(rid));
+        allow create: if canSell(raffle(rid));
+        allow update, delete: if isAdminOf(raffle(rid));
+      }
+
+      // Entregas de efectivo de un vendedor al organizador.
+      match /handovers/{hid} {
+        allow read: if isAdminOf(raffle(rid))
+          || (isSellerOf(raffle(rid)) && resource.data.sellerId == me().mid);
+        allow write: if isAdminOf(raffle(rid));
+      }
+
+      match /logs/{lid} {
+        allow read: if isAdminOf(raffle(rid));
+        allow create: if request.resource.data.by == uid()
+          && ((hasProfile() && isStaffOf(raffle(rid))) || (!hasProfile() && signed() && request.resource.data.action == 'public_reserve'));
+      }
+
+      // Comprobante público verificable (sin datos sensibles), se accede con su token.
+      match /tokens/{token} {
+        allow get: if true;
+        allow create: if (hasProfile() && canSell(raffle(rid))) || (!hasProfile() && signed() && publicOpen(raffle(rid)));
+        allow update: if isStaffOf(raffle(rid));
+        allow delete: if isAdminOf(raffle(rid));
+      }
+
+      match /blocked/{phone} {
+        allow read: if isStaffOf(raffle(rid));
+        allow write: if isAdminOf(raffle(rid));
+      }
+    }
+
+    // Enlaces bonitos: /r/{slug} → rifa
+    match /slugs/{slug} {
+      allow get: if true;
+      allow create: if isAdminOf(raffle(request.resource.data.rid));
+      allow update, delete: if isAdminOf(raffle(resource.data.rid));
+    }
+
+    // ───────── Personas ─────────
+    match /users/{u} {
+      allow get: if (signed() && u == uid()) || isSuper() || (active() && resource.data.orgId == me().orgId);
+      allow list: if isSuper() || (active() && resource.data.orgId == me().orgId);
+      allow create: if isSuper()
+        || (ownsOrg(request.resource.data.orgId) && request.resource.data.role == 'member');
+      allow update: if isSuper()
+        || (ownsOrg(resource.data.orgId) && resource.data.role == 'member'
+            && request.resource.data.role == 'member' && request.resource.data.orgId == resource.data.orgId)
+        || (signed() && u == uid()
+            && changed().hasOnly(['name', 'phone', 'mustChangePassword', 'lastLogin']));
+    }
+
+    // Usuario → correo interno de inicio de sesión (necesario antes de iniciar sesión).
+    match /usernames/{name} {
+      allow get: if true;
+      allow create, update, delete: if isSuper() || (active() && me().role == 'owner');
+    }
+
+    match /orgs/{orgId} {
+      allow read: if isSuper() || (active() && me().orgId == orgId);
+      allow create, delete: if isSuper();
+      allow update: if isSuper() || (ownsOrg(orgId) && !changed().hasAny(['ownerUid', 'active']));
+    }
+
+    // Tasas de cambio compartidas (BCV).
+    match /config/{doc} {
+      allow read: if true;
+      allow write: if active();
+    }
+  }
+}

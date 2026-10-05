@@ -1,0 +1,26 @@
+<script setup>
+const uid = 'lg' + Math.random().toString(36).slice(2, 8)
+defineProps({ size: { type: Number, default: 34 }, light: Boolean, text: { type: Boolean, default: true } })
+</script>
+<template>
+  <span class="logo" :class="{ light }">
+    <svg :width="size" :height="size" viewBox="0 0 512 512" aria-hidden="true">
+      <defs>
+        <linearGradient :id="uid + 'a'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7C3AED" /><stop offset="1" stop-color="#3B0F8C" /></linearGradient>
+        <linearGradient :id="uid + 'b'" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FDE68A" /><stop offset="1" stop-color="#F5A50B" /></linearGradient>
+      </defs>
+      <rect width="512" height="512" rx="128" :fill="`url(#${uid}a)`" />
+      <g transform="rotate(-12 256 256)">
+        <path d="M118 176a28 28 0 0 1 28-28h220a28 28 0 0 1 28 28v34a46 46 0 0 0 0 92v34a28 28 0 0 1-28 28H146a28 28 0 0 1-28-28v-34a46 46 0 0 0 0-92z" :fill="`url(#${uid}b)`" />
+        <path d="M300 160v192" stroke="#3B0F8C" stroke-width="12" stroke-dasharray="18 14" stroke-linecap="round" opacity=".55" />
+        <text x="210" y="292" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-weight="900" font-size="110" fill="#3B0F8C">R</text>
+      </g>
+    </svg>
+    <b v-if="text">Rifalo</b>
+  </span>
+</template>
+<style>
+.logo { display: inline-flex; align-items: center; gap: 10px; }
+.logo b { font-family: var(--font-display); font-weight: 800; font-size: 1.3rem; letter-spacing: -.02em; color: var(--text); }
+.logo.light b { color: #fff; }
+</style>
