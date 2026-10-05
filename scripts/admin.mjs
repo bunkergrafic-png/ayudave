@@ -72,17 +72,19 @@ async function authConfig() {
   const token = await accessToken()
   const base = `https://identitytoolkit.googleapis.com`
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  let r = await fetch(`${base}/admin/v2/projects/${PROJECT}/config`, { headers })
-  if (r.status === 404 || (await r.clone().text()).includes('CONFIGURATION_NOT_FOUND')) {
-    console.log('   Inicializando Firebase Authentication…')
-    const init = await fetch(`${base}/v2/projects/${PROJECT}/identityPlatform:initializeAuth`, { method: 'POST', headers, body: '{}' })
-    if (!init.ok) throw new Error(`initializeAuth: ${init.status} ${await init.text()}`)
-  }
-  r = await fetch(`${base}/admin/v2/projects/${PROJECT}/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired,signIn.anonymous.enabled`, {
+  // Sin usar Identity Platform (que exige facturación): se actualiza la configuración de Firebase Auth.
+  const r = await fetch(`${base}/admin/v2/projects/${PROJECT}/config?updateMask=signIn.email.enabled,signIn.email.passwordRequired,signIn.anonymous.enabled`, {
     method: 'PATCH', headers,
     body: JSON.stringify({ signIn: { email: { enabled: true, passwordRequired: true }, anonymous: { enabled: true } } })
   })
-  if (!r.ok) throw new Error(`updateConfig: ${r.status} ${await r.text()}`)
+  if (!r.ok) {
+    const txt = await r.text()
+    if (txt.includes('CONFIGURATION_NOT_FOUND') || r.status === 404) {
+      console.log('⚠️  Authentication aún no está iniciado en la consola de Firebase.')
+      process.exit(3)
+    }
+    throw new Error(`updateConfig: ${r.status} ${txt}`)
+  }
   console.log('✅ Inicio de sesión con usuario/clave y anónimo activado')
 }
 

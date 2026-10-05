@@ -53,6 +53,15 @@ $env:RIFALO_ADMIN_NAME = $name
 
 Paso "Activando inicio de sesion (usuario/clave y anonimo)"
 & node scripts/admin.mjs auth-config
+while ($LASTEXITCODE -eq 3) {
+  Write-Host ""
+  Write-Host "    Falta un clic en Firebase (gratis, sin tarjeta):" -ForegroundColor Yellow
+  Write-Host "    1. Se abrio la pagina de Authentication. Toca el boton 'Comenzar' (Get started)."
+  Write-Host "    2. Si te muestra proveedores, activa 'Correo electronico/contrasena' y 'Anonimo' (si no, no importa)."
+  Start-Process 'https://console.firebase.google.com/project/ayudave-81546/authentication'
+  Read-Host "    Cuando lo hayas hecho, vuelve aqui y presiona Enter"
+  & node scripts/admin.mjs auth-config
+}
 if ($LASTEXITCODE -ne 0) { Falla "No se pudo configurar el inicio de sesion." }
 
 Paso "Borrando los datos viejos de ayudave"
