@@ -1,56 +1,57 @@
-// Tasas oficiales BCV (misma fuente que usamos en Bunkergraf y Renuevo: ve.dolarapi.com).
+// Tasas oficiales BCV (misma fuente y validaciones que la calculadora de Mano: ve.dolarapi.com).
 import { reactive } from 'vue'
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'
 import { db, auth } from '../firebase'
 
-export const rates = reactive({ USD: 0, EUR: 0, date: null, loading: false, error: '' })
+const USD_URL = 'https://ve.dolarapi.com/v1/dolares/oficial'
+const EUR_URL = 'https://ve.dolarapi.com/v1/euros'
+const CACHE_TTL_MS = 5 * 60 * 1000
+const MIN_RATE = 1
+const MAX_RATE = 100000
 
-const LS_KEY = 'rifalo.rates'
+export const rates = reactive({ USD: 0, EUR: 0, fetchedAt: null, loading: false, error: '' })
+
+const LS_KEY = 'rifalo.rates.v2'
 try {
-  const cached = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
-  if (cached) Object.assign(rates, cached)
+  const c = JSON.parse(localStorage.getItem(LS_KEY) || 'null')
+  if (c) Object.assign(rates, { USD: c.USD, EUR: c.EUR, fetchedAt: c.fetchedAt })
 } catch { /* sin almacenamiento local */ }
 
-function remember() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ USD: rates.USD, EUR: rates.EUR, date: rates.date })) } catch { /* noop */ }
-}
+const valid = r => r && !Number.isNaN(r) && r >= MIN_RATE && r <= MAX_RATE
 
 async function fromApi() {
-  const [u, e] = await Promise.all([
-    fetch('https://ve.dolarapi.com/v1/dolares/oficial').then(r => r.json()),
-    fetch('https://ve.dolarapi.com/v1/euros/oficial').then(r => r.json())
-  ])
-  return {
-    USD: Number(u.promedio || u.venta) || 0,
-    EUR: Number(e.promedio || e.venta) || 0,
-    date: u.fechaActualizacion || new Date().toISOString()
-  }
+  const [u, e] = await Promise.all([fetch(USD_URL), fetch(EUR_URL)])
+  if (!u.ok || !e.ok) throw new Error('Tasa no disponible')
+  const usd = Number((await u.json())?.promedio)
+  const list = await e.json()
+  const eur = Number((Array.isArray(list) ? list.find(d => d.fuente === 'oficial') : list)?.promedio)
+  if (!valid(usd) || !valid(eur)) throw new Error('Tasa fuera de rango')
+  return { USD: usd, EUR: eur }
 }
 
-/** Carga la tasa: primero la API del BCV; si falla, la última guardada en la base de datos. */
+/** Carga la tasa (caché de 5 min). Si la API falla, usa la última guardada en la base de datos. */
 export async function loadRates({ force = false } = {}) {
   if (rates.loading) return rates
-  const fresh = rates.date && Date.now() - new Date(rates.fetchedAt || 0).getTime() < 30 * 60000
-  if (fresh && !force) return rates
+  const fresh = rates.fetchedAt && Date.now() - new Date(rates.fetchedAt).getTime() < CACHE_TTL_MS
+  if (fresh && !force && rates.USD) return rates
   rates.loading = true
   rates.error = ''
   try {
     const r = await fromApi()
-    if (!r.USD) throw new Error('Tasa vacía')
     Object.assign(rates, r, { fetchedAt: new Date().toISOString() })
-    remember()
+    try { localStorage.setItem(LS_KEY, JSON.stringify({ USD: rates.USD, EUR: rates.EUR, fetchedAt: rates.fetchedAt })) } catch { /* noop */ }
     if (auth.currentUser && !auth.currentUser.isAnonymous) {
-      setDoc(doc(db, 'config', 'rates'), { ...r, source: 'BCV', updatedAt: serverTimestamp() }).catch(() => {})
+      setDoc(doc(db, 'config', 'rates'), { ...r, fetchedAt: rates.fetchedAt, source: 'BCV', updatedAt: serverTimestamp() }).catch(() => {})
     }
   } catch {
     try {
       const snap = await getDoc(doc(db, 'config', 'rates'))
-      if (snap.exists()) {
-        const d = snap.data()
-        Object.assign(rates, { USD: d.USD, EUR: d.EUR, date: d.date })
-        remember()
-      } else rates.error = 'No se pudo consultar la tasa BCV'
-    } catch { rates.error = 'No se pudo consultar la tasa BCV' }
+      const d = snap.exists() ? snap.data() : null
+      if (d?.USD && d?.EUR) Object.assign(rates, { USD: d.USD, EUR: d.EUR, fetchedAt: d.fetchedAt || rates.fetchedAt })
+      else if (!rates.USD) rates.error = 'No se pudo obtener la tasa. Verifica tu conexión.'
+    } catch {
+      if (!rates.USD) rates.error = 'No se pudo obtener la tasa. Verifica tu conexión.'
+    }
   } finally {
     rates.loading = false
   }
@@ -63,4 +64,9 @@ export function raffleRate(raffle) {
   if (raffle.rate.mode === 'manual' && raffle.rate.value) return Number(raffle.rate.value)
   const base = raffle.currency === 'EUR' ? rates.EUR : rates.USD
   return Number(base || raffle.rate.value || 0)
+}
+
+export function formatDateTime(d) {
+  if (!d) return ''
+  return new Intl.DateTimeFormat('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true }).format(new Date(d))
 }

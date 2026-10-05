@@ -1,0 +1,22 @@
+// Prueba visual de la calculadora de divisas (simula la API del BCV).
+import { chromium } from 'playwright-core'
+const SHOTS = process.env.SHOTS || './shots'
+const b = await chromium.launch({ executablePath: process.env.CHROME || '/opt/pw-browsers/chromium-1194/chrome-linux/chrome', args: ['--no-sandbox'] })
+const p = await b.newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2 })
+await p.route('https://ve.dolarapi.com/v1/dolares/oficial', r => r.fulfill({ json: { fuente: 'oficial', promedio: 192.4567 } }))
+await p.route('https://ve.dolarapi.com/v1/euros', r => r.fulfill({ json: [{ fuente: 'oficial', promedio: 224.1 }, { fuente: 'paralelo', promedio: 300 }] }))
+await p.goto((process.env.BASE || 'http://127.0.0.1:5173') + '/login')
+await p.click('text=Calculadora de Divisas')
+await p.waitForSelector('.cc-res')
+const vals = await p.locator('.cc-res b').allTextContents()
+if (!vals[0].includes('192,46') || !vals[1].includes('0,86')) throw new Error('Conversión USD incorrecta: ' + vals)
+await p.fill('.cc-input', '1000')
+await p.click('.cc-cur button:has-text("Bs.")')
+const v2 = await p.locator('.cc-res b').allTextContents()
+if (!v2[0].includes('5,20') || !v2[1].includes('4,46')) throw new Error('Conversión Bs incorrecta: ' + v2)
+await p.screenshot({ path: `${SHOTS}/calculadora.png` })
+await p.goBack()
+await p.waitForTimeout(400)
+if (await p.locator('.cc').count()) throw new Error('El botón atrás no cerró la calculadora')
+console.log('✅ Calculadora OK', vals, v2)
+await b.close()

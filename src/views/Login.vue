@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import Logo from '../components/Logo.vue'
 import Icon from '../components/Icon.vue'
 import { login } from '../lib/session'
+import CurrencyCalc from '../components/CurrencyCalc.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,6 +13,7 @@ const password = ref('')
 const show = ref(false)
 const busy = ref(false)
 const error = ref('')
+const calc = ref(false)
 
 async function submit() {
   error.value = ''
@@ -68,7 +70,9 @@ const floaters = ['007', '128', '042', '199', '076', '153', '011', '090', '164']
           <span v-if="busy" class="spinner" /><template v-else>Entrar <Icon name="arrowRight" /></template>
         </button>
         <p class="tiny faint center">¿Olvidaste tu clave? Pídele al organizador que te asigne una nueva.</p>
+        <button type="button" class="calc-link" @click="calc = true"><span>💱</span> Calculadora de Divisas</button>
       </form>
+      <CurrencyCalc :open="calc" @close="calc = false" />
     </section>
   </div>
 </template>
@@ -93,6 +97,9 @@ const floaters = ['007', '128', '042', '199', '076', '153', '011', '090', '164']
 .login-form { width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 16px; }
 .login-form h2 { font-size: 2rem; }
 .eye { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; padding: 8px; color: var(--text-3); cursor: pointer; }
+.calc-link { align-self: center; display: inline-flex; align-items: center; gap: 8px; margin-top: 4px; padding: 12px 20px; border-radius: 14px; border: 1px solid rgba(245, 165, 11, .35); background: var(--surface); color: var(--gold-600); font-weight: 700; font-size: .9rem; cursor: pointer; }
+.calc-link:hover { border-color: var(--gold-500); }
+.calc-link span { font-size: 1.1rem; }
 .login-error { display: flex; gap: 8px; align-items: center; padding: 12px 14px; border-radius: 12px; background: var(--danger-bg); color: var(--danger); font-weight: 600; font-size: .88rem; }
 @media (max-width: 900px) {
   .login { grid-template-columns: 1fr; }
