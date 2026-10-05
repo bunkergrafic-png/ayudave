@@ -71,7 +71,7 @@ async function authConfig() {
   if (EMU) return console.log('(emulador: no hace falta)')
   const token = await accessToken()
   const base = `https://identitytoolkit.googleapis.com`
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', 'X-Goog-User-Project': PROJECT }
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   let r = await fetch(`${base}/admin/v2/projects/${PROJECT}/config`, { headers })
   if (r.status === 404 || (await r.clone().text()).includes('CONFIGURATION_NOT_FOUND')) {
     console.log('   Inicializando Firebase Authentication…')
