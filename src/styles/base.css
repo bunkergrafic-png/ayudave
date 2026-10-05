@@ -269,3 +269,5 @@ button { font: inherit; color: inherit; }
 
 .upload { display: flex; align-items: center; justify-content: center; gap: 10px; border: 2px dashed var(--line-strong); border-radius: 14px; padding: 16px; color: var(--text-2); font-weight: 600; cursor: pointer; }
 .upload:hover { border-color: var(--brand-400); color: var(--brand-600); }
+
+.app-version { text-align: center; font-size: .72rem; color: var(--text-3); font-variant-numeric: tabular-nums; }

@@ -7,6 +7,7 @@ import { session } from '../lib/session'
 import { rafflesFor } from '../lib/raffles'
 import { firstName } from '../lib/format'
 import { toastError } from '../lib/ui'
+import { VERSION_LABEL } from '../lib/version'
 
 const router = useRouter()
 const raffles = ref(null)
@@ -51,6 +52,7 @@ const greet = hour < 12 ? 'Buenos días' : hour < 19 ? 'Buenas tardes' : 'Buenas
     <div v-else class="cards-grid">
       <RaffleCard v-for="r in shown" :key="r.id" :raffle="r" />
     </div>
+    <p class="app-version">Rifalo {{ VERSION_LABEL }}</p>
   </div>
 </template>
 

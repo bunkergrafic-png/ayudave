@@ -5,6 +5,7 @@ import Logo from '../components/Logo.vue'
 import Icon from '../components/Icon.vue'
 import { login } from '../lib/session'
 import CurrencyCalc from '../components/CurrencyCalc.vue'
+import { VERSION_LABEL } from '../lib/version'
 
 const router = useRouter()
 const route = useRoute()
@@ -71,6 +72,7 @@ const floaters = ['007', '128', '042', '199', '076', '153', '011', '090', '164']
         </button>
         <p class="tiny faint center">¿Olvidaste tu clave? Pídele al organizador que te asigne una nueva.</p>
         <button type="button" class="calc-link" @click="calc = true"><span>💱</span> Calculadora de Divisas</button>
+        <p class="app-version">{{ VERSION_LABEL }}</p>
       </form>
       <CurrencyCalc :open="calc" @close="calc = false" />
     </section>

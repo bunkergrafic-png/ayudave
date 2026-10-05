@@ -9,6 +9,7 @@ import { session, logout, changeMyPassword } from '../lib/session'
 import { rates, loadRates } from '../lib/rates'
 import { initials } from '../lib/format'
 import { toast, toastError } from '../lib/ui'
+import { VERSION_LABEL } from '../lib/version'
 
 const router = useRouter()
 const calc = ref(false)
@@ -67,6 +68,7 @@ async function savePass() {
       </nav>
       <div class="side-foot">
         <div v-if="session.org" class="org-pill"><Icon name="building" :size="16" />{{ session.org.name }}</div>
+        <p class="app-version" style="margin-top: 10px">{{ VERSION_LABEL }}</p>
       </div>
     </aside>
 
@@ -98,7 +100,7 @@ async function savePass() {
 
     <CurrencyCalc :open="calc" @close="calc = false" />
 
-    <Sheet :open="menu" :title="session.profile?.name || ''" :subtitle="`@${session.profile?.username} · ${roleLabel}`" @close="menu = false">
+    <Sheet :open="menu" :title="session.profile?.name || ''" :subtitle="`@${session.profile?.username} · ${roleLabel} · Rifalo ${VERSION_LABEL}`" @close="menu = false">
       <div class="stack" style="--gap: 8px">
         <button class="btn btn-ghost btn-block" @click="menu = false; pass.show = true"><Icon name="key" />Cambiar mi clave</button>
         <button class="btn btn-ghost btn-block" @click="toggleTheme"><Icon name="moon" />Modo claro / oscuro</button>

@@ -1,7 +1,7 @@
 {
   "name": "rifalo",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.3.0",
   "type": "module",
   "description": "Rifalo: gestión de rifas con vendedores, pagos y sorteos",
   "scripts": {
