@@ -48,12 +48,16 @@ async function wipe() {
   }
   let token
   let total = 0
-  do {
-    const page = await auth.listUsers(1000, token)
-    if (page.users.length) await auth.deleteUsers(page.users.map(u => u.uid))
-    total += page.users.length
-    token = page.pageToken
-  } while (token)
+  try {
+    do {
+      const page = await auth.listUsers(1000, token)
+      if (page.users.length) await auth.deleteUsers(page.users.map(u => u.uid))
+      total += page.users.length
+      token = page.pageToken
+    } while (token)
+  } catch (e) {
+    console.log(`   (usuarios: ${e.message})`)
+  }
   console.log(`✅ Listo: ${cols.length} colecciones y ${total} usuarios eliminados`)
 }
 
