@@ -21,6 +21,7 @@ const nav = computed(() => [
   { to: '/', icon: 'ticket', label: 'Rifas' },
   ...(role.value === 'owner' || role.value === 'super' ? [{ to: '/equipo', icon: 'users', label: 'Equipo' }] : []),
   ...(role.value === 'super' ? [{ to: '/organizaciones', icon: 'building', label: 'Clientes' }] : []),
+  { to: '/ayuda', icon: 'info', label: 'Ayuda' },
   { to: '/ajustes', icon: 'settings', label: 'Ajustes' }
 ])
 

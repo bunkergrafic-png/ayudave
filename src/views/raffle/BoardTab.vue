@@ -3,6 +3,7 @@ import { ref, inject, computed, watch } from 'vue'
 import Icon from '../../components/Icon.vue'
 import NumberGrid from '../../components/NumberGrid.vue'
 import Legend from '../../components/Legend.vue'
+import NumberLookup from '../../components/NumberLookup.vue'
 import SellSheet from '../../components/SellSheet.vue'
 import { session, isRaffleAdmin } from '../../lib/session'
 import { effective, canSellNumber, secureRandomInt } from '../../lib/raffle'
@@ -14,6 +15,9 @@ const ctx = inject('ctx')
 const selected = ref([])
 const filter = ref('all')
 const sell = ref(false)
+const q = ref('')
+const only = ref(null)
+function pick(n) { if (!selected.value.includes(n)) toggle(n); q.value = '' }
 const isAdmin = computed(() => isRaffleAdmin(ctx.raffle))
 const mid = computed(() => session.profile?.mid)
 const canSellNow = computed(() => isAdmin.value ? ['active', 'closed'].includes(ctx.raffle.status) : ctx.raffle.status === 'active')
@@ -68,11 +72,12 @@ const myCount = computed(() => Object.values(ctx.board).filter(e => effective(e)
         </div>
         <button v-if="canSellNow" class="btn btn-soft btn-sm" @click="lucky"><Icon name="dice" />Al azar</button>
       </div>
+      <NumberLookup v-model="q" @only="only = $event" @pick="pick" />
       <Legend :stats="ctx.stats" style="margin-bottom: 14px" />
       <p v-if="ctx.raffle.assignMode === 'blocks' && !isAdmin" class="small muted" style="margin-bottom: 10px">
         <Icon name="info" :size="14" /> Solo puedes vender los números de tu bloque; los demás se ven atenuados.
       </p>
-      <NumberGrid :raffle="ctx.raffle" :board="ctx.board" :selected="selected" :my-mid="mid" :is-admin="isAdmin" :filter="filter" mode="sell" @toggle="toggle" @open="open" />
+      <NumberGrid :raffle="ctx.raffle" :board="ctx.board" :selected="selected" :my-mid="mid" :is-admin="isAdmin" :filter="filter" external :query="q" :only="only" mode="sell" @toggle="toggle" @open="open" />
     </div>
 
     <Transition name="slide-up">

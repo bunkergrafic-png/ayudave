@@ -5,6 +5,7 @@ import { doc, getDoc, getDocs, collection } from 'firebase/firestore'
 import { db } from '../../firebase'
 import Icon from '../../components/Icon.vue'
 import PersonSheet from '../../components/PersonSheet.vue'
+import HelpButton from '../../components/HelpButton.vue'
 import { session, actorFor, isRaffleAdmin } from '../../lib/session'
 import { defaultRaffle, createRaffle, saveRaffle, changeSlug } from '../../lib/raffles'
 import { listOrgPeople } from '../../lib/team'
@@ -179,6 +180,7 @@ async function save(publish = false) {
           <h1>{{ editing ? 'Editar rifa' : 'Nueva rifa' }}</h1>
           <p class="muted small">{{ editing ? f.title : 'Configura todo a tu medida. Podrás cambiarlo después.' }}</p>
         </div>
+        <HelpButton topic="crear-rifa" label="Ayuda" />
       </div>
 
       <div class="stack" style="--gap: 16px">

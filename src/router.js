@@ -9,6 +9,7 @@ const routes = [
   { path: '/rifa/:id/editar', component: () => import('./views/admin/RaffleEditor.vue'), meta: { auth: true } },
   { path: '/equipo', component: () => import('./views/admin/Team.vue'), meta: { auth: true, owner: true } },
   { path: '/organizaciones', component: () => import('./views/admin/Orgs.vue'), meta: { auth: true, super: true } },
+  { path: '/ayuda', component: () => import('./views/Help.vue'), meta: { auth: true } },
   { path: '/ajustes', component: () => import('./views/Settings.vue'), meta: { auth: true } },
   { path: '/r/:slug', component: () => import('./views/public/PublicRaffle.vue'), meta: { public: true } },
   { path: '/t/:rid/:token', component: () => import('./views/public/Verify.vue'), meta: { public: true } },

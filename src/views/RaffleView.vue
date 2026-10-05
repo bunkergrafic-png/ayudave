@@ -14,6 +14,7 @@ import DrawTab from './raffle/DrawTab.vue'
 import ReportsTab from './raffle/ReportsTab.vue'
 import LogTab from './raffle/LogTab.vue'
 import ShareTab from './raffle/ShareTab.vue'
+import HelpButton from '../components/HelpButton.vue'
 import { session, isRaffleAdmin, isRaffleSeller, actorFor } from '../lib/session'
 import { watchBoard, boardStats, sweepExpired, isExpired, orderStatus } from '../lib/raffle'
 import { setRaffleStatus } from '../lib/raffles'
@@ -134,6 +135,10 @@ async function changeStatus(s) {
   try { await setRaffleStatus(ctx.raffle, s, actorFor(ctx.raffle)); toast('Estado actualizado') } catch (e) { toastError(e) }
 }
 const rate = computed(() => ctx.raffle ? raffleRate(ctx.raffle) : 0)
+const helpTopic = computed(() => ({
+  board: 'vender', orders: 'buscar', payments: isAdmin.value ? 'verificar' : 'registrar-pago', inbox: 'apartados-web',
+  team: isAdmin.value ? 'entregas' : 'mi-cuenta', draw: 'sorteo', reports: 'reportes', log: 'reportes', share: 'compartir'
+}[tab.value] || 'tablero'))
 </script>
 
 <template>
@@ -196,6 +201,7 @@ const rate = computed(() => ctx.raffle ? raffleRate(ctx.raffle) : 0)
         <button v-for="t in tabs" :key="t.k" class="rv-tab" :class="{ on: tab === t.k }" @click="tab = t.k">
           <Icon :name="t.icon" :size="18" /><span>{{ t.label }}</span><i v-if="t.count" class="count">{{ t.count }}</i>
         </button>
+        <HelpButton :topic="helpTopic" label="Ayuda" />
       </nav>
 
       <div class="rv-body">

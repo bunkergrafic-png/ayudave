@@ -1,4 +1,5 @@
-# Rifalo - instalacion automatica en Firebase (ayudave-81546)
+# Rifalo - instalacion INICIAL en Firebase (ayudave-81546). ATENCION: BORRA TODOS LOS DATOS.
+# Para actualizar la app sin borrar nada usa scripts/publicar.ps1
 # Uso (PowerShell):  irm https://raw.githubusercontent.com/bunkergrafic-png/ayudave/main/scripts/instalar.ps1 | iex
 # La llave de Firebase se usa solo en esta computadora; no se envia a ningun otro lado.
 
@@ -9,7 +10,10 @@ function Falla($t) { Write-Host ""; Write-Host "ERROR: $t" -ForegroundColor Red;
 
 Write-Host ""
 Write-Host "  RIFALO - instalacion automatica" -ForegroundColor Yellow
-Write-Host "  Esto BORRA los datos viejos de ayudave, crea tu cuenta y publica la app."
+Write-Host "  ATENCION: esto BORRA TODOS LOS DATOS (rifas, ventas, usuarios) y empieza de cero."
+Write-Host "  Para solo actualizar la app usa publicar.ps1."
+$ok = Read-Host "  Escribe BORRAR para continuar"
+if ($ok -ne 'BORRAR') { Write-Host "Cancelado. No se toco nada."; Read-Host "Presiona Enter para cerrar"; exit 0 }
 Write-Host ""
 
 # 1. Llave de Firebase

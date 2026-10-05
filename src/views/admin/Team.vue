@@ -5,6 +5,7 @@ import { db } from '../../firebase'
 import Icon from '../../components/Icon.vue'
 import Sheet from '../../components/Sheet.vue'
 import PersonSheet from '../../components/PersonSheet.vue'
+import HelpButton from '../../components/HelpButton.vue'
 import { session } from '../../lib/session'
 import { listOrgPeople, setActive, resetPassword, updatePerson } from '../../lib/team'
 import { rafflesFor } from '../../lib/raffles'
@@ -63,7 +64,10 @@ const resetText = computed(() => reset.p ? `Hola ${firstName(reset.p.name)}, tu 
   <div class="container stack" style="--gap: 18px">
     <div class="row wrap between">
       <div><h1>Equipo</h1><p class="muted small">Personas que pueden vender o administrar tus rifas</p></div>
-      <button class="btn btn-gold" :disabled="!orgId" @click="create = true"><Icon name="plus" />Nueva persona</button>
+      <div class="row" style="--gap: 6px">
+        <HelpButton topic="equipo" />
+        <button class="btn btn-gold" :disabled="!orgId" @click="create = true"><Icon name="plus" />Nueva persona</button>
+      </div>
     </div>
     <div class="row wrap" style="--gap: 8px">
       <select v-if="isSuper" v-model="orgId" class="select" style="width: auto" @change="load">

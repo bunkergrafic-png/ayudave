@@ -12,7 +12,11 @@ const props = defineProps({
   mode: { type: String, default: 'sell' }, // sell | public | view
   myMid: { type: String, default: '' },
   isAdmin: Boolean,
-  filter: { type: String, default: 'all' }
+  filter: { type: String, default: 'all' },
+  // Búsqueda controlada desde fuera (tablero interno): oculta el buscador propio.
+  external: Boolean,
+  query: { type: String, default: '' },
+  only: { type: Array, default: null }
 })
 const emit = defineEmits(['toggle', 'open'])
 
@@ -34,9 +38,11 @@ function stateOf(n) {
 
 const visible = computed(() => {
   const size = props.raffle.size
-  const q = search.value.trim()
+  const q = props.external ? props.query.replace(/\D/g, '') : search.value.trim()
   let nums
-  if (q) {
+  if (props.only) {
+    nums = [...props.only].sort((a, b) => a - b)
+  } else if (q) {
     nums = []
     for (let n = 1; n <= size; n++) if (pad(n, size).includes(q)) nums.push(n)
     nums = nums.slice(0, 600)
@@ -77,12 +83,12 @@ function rangeLabel(i) {
 
 <template>
   <div class="ngrid-wrap">
-    <div class="row wrap ngrid-tools">
-      <div class="input-group grow" style="min-width: 160px; max-width: 260px">
+    <div v-if="!external || (pages > 1 && !query && !only)" class="row wrap ngrid-tools">
+      <div v-if="!external" class="input-group grow" style="min-width: 160px; max-width: 260px">
         <span class="prefix"><Icon name="search" :size="18" /></span>
         <input v-model="search" class="input" inputmode="numeric" placeholder="Buscar número" aria-label="Buscar número" />
       </div>
-      <div v-if="pages > 1 && !search" class="segmented">
+      <div v-if="pages > 1 && !search && !query && !only" class="segmented">
         <button v-for="i in pages" :key="i" :class="{ on: page === i - 1 }" @click="page = i - 1">{{ rangeLabel(i - 1) }}</button>
       </div>
     </div>
